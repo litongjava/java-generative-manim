@@ -325,3 +325,4 @@ class StarField(VGroup):
                 )
             )
         return LaggedStart(*animations, lag_ratio=0.05)
+# 渲染命令：manim -pqh TangentProof.py TangentDerivation

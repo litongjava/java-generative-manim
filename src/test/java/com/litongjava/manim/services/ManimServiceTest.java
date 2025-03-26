@@ -12,7 +12,7 @@ public class ManimServiceTest {
   @Test
   public void test() {
     EnvUtils.load();
-    String topic = "已知 f(x)=x^2,求解f(x)的切线";
+    String topic = PromptEngine.renderToString("video_question_1.txt");
     RespBodyVo genVideo = Aop.get(ManimService.class).genVideo(topic);
   }
 

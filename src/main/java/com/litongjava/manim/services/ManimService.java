@@ -13,12 +13,18 @@ import com.litongjava.tio.utils.environment.EnvUtils;
 import com.litongjava.volcengine.VolcEngineConst;
 import com.litongjava.volcengine.VolcEngineModels;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class ManimService {
 
   public RespBodyVo genVideo(String topic) {
     String script = genScript(topic);
+    log.info("script:{}",script);
     String sence = genSence(script);
+    log.info("sence:{}",sence);
     String code = genCode(sence);
+    log.info("code:{}",code);
     return RespBodyVo.ok(code);
   }
 
