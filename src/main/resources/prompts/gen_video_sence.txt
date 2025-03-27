@@ -7,27 +7,116 @@
 6. 请使用用户的消息语言作为输出语言.
 请输出完整的详细场景提示文本。
 
-下面是一个场景提示文本实例
-```latex
-Begin by slowly fading in a panoramic star field backdrop to set a cosmic stage. As the camera orients itself to reveal a three-dimensional axis frame, introduce a large title reading 'Quantum Field Theory: 
-A Journey into the Electromagnetic Interaction,' written in bold, glowing text at the center of the screen. The title shrinks and moves into the upper-left corner, making room for a rotating wireframe representation of 4D Minkowski spacetime—though rendered in 3D for clarity—complete with a light cone that stretches outward. While this wireframe slowly rotates, bring in color-coded equations of the relativistic metric, such as 
-ds2=−c2dt2+dx2+dy2+dz2ds^2 = -c^2 dt^2 + dx^2 + dy^2 + dz^2, with each component highlighted in a different hue to emphasize the negative time component and positive spatial components.
+下面是一个场景提示文本实例:
+## 如何求解函数 \( f(x) = x^2 \) 的切线方程
 
-Next, zoom the camera into the wireframe's origin to introduce the basic concept of a quantum field. Show a ghostly overlay of undulating plane waves in red and blue, symbolizing an electric field and a magnetic field respectively, oscillating perpendicularly in sync. Label these fields as E⃗\vec{E} and B⃗\vec{B}, placing them on perpendicular axes with small rotating arrows that illustrate their directions over time. Simultaneously, use a dynamic 3D arrow to demonstrate that the wave propagates along the z-axis. 
+### 【场景一：欢迎介绍与星空背景】
 
-As the wave advances, display a short excerpt of Maxwell's equations, morphing from their classical form in vector calculus notation to their elegant, relativistic compact form: ∂μFμν=μ0Jν\partial_\mu F^{\mu \nu} = \mu_0 J^\nu. Animate each transformation by dissolving and reassembling the symbols, underscoring the transition from standard form to four-vector notation.
+- **背景设计与整体氛围**
+  - 背景采用覆盖整个画面、深蓝色调的矩形，并在其上通过随机分布的小白点构成星空，这些星星以正弦波变化实现轻微闪烁，营造出神秘且高科技的视觉氛围。
+  - 右上角显示场景编号“01”，用于标识当前场景。
 
-Then, shift the focus to the Lagrangian density for quantum electrodynamics (QED):
-LQED=ψˉ(iγμDμ−m)ψ−14FμνFμν.\mathcal{L}_{\text{QED}} = \bar{\psi}(i \gamma^\mu D_\mu - m)\psi - \tfrac{1}{4}F_{\mu\nu}F^{\mu\nu}.
+- **主要内容**
+  - 屏幕上方呈现大标题：“大家好，欢迎来到本期数学讲解视频”，文字颜色为纯白，采用渐显（FadeIn）动画效果。
+  - 标题下方依次出现副标题，由三部分组成：
+    - 文本：“如何求解函数”
+    - 数学公式：\(f(x)=x^2\)（使用 LaTeX 渲染）
+    - 文本：“的切线方程”
+  - 副标题通过书写（Write）或替换转换（ReplacementTransform）的动画效果显现，并伴有短暂延时，确保观众能够逐步捕捉信息。
 
-Project this equation onto a semi-transparent plane hovering in front of the wireframe spacetime, with each symbol color-coded: the Dirac spinor ψ\psi in orange, the covariant derivative DμD_\mu in green, the gamma matrices γμ\gamma^\mu in bright teal, and the field strength tensor FμνF_{\mu\nu} in gold. Let these terms gently pulse to indicate they are dynamic fields in spacetime, not just static quantities. 
+- **相机与过渡效果**
+  - 标题与副标题出现后，相机以轻微前移（约 0.2 个单位向外移动）带来视觉引导感。
+  - 动画整体节奏较为平缓，每个部分之间保留短暂停顿，使星空闪烁与文本效果相互衬托。
 
-While the Lagrangian is on screen, illustrate the gauge invariance by showing a quick animation where ψ\psi acquires a phase factor eiα(x)e^{i \alpha(x)}, while the gauge field transforms accordingly. Arrows and short textual callouts appear around the equation to explain how gauge invariance enforces charge conservation.
-Next, pan the camera over to a large black background to present a simplified Feynman diagram. Show two electron lines approaching from the left and right, exchanging a wavy photon line in the center. 
+---
 
-The electron lines are labeled e−e^- in bright blue, and the photon line is labeled γ\gamma in yellow. Subtitles and small pop-up text boxes narrate how this basic vertex encapsulates the electromagnetic interaction between charged fermions, highlighting that the photon is the force carrier. Then, animate the coupling constant α≈1137\alpha \approx \frac{1}{137} flashing above the diagram, gradually evolving from a numeric approximation to the symbolic form α=e24πϵ0ℏc\alpha = \frac{e^2}{4 \pi \epsilon_0 \hbar c}.
+### 【场景二：切线概念与问题背景介绍】
 
-Afterward, transition to a 2D graph that plots the running of the coupling constant α\alpha with respect to energy scale, using the renormalization group flow. As the graph materializes, a vertical axis labeled 'Coupling Strength' and a horizontal axis labeled 'Energy Scale' come into view, each sporting major tick marks and numerical values. The curve gently slopes upward, illustrating how α\alpha grows at higher energies, with dynamic markers along the curve to indicate different experimental data points. Meanwhile, short textual captions in the corners clarify that this phenomenon arises from virtual particle-antiparticle pairs contributing to vacuum polarization.
+- **背景与布局**
+  - 背景换为统一填充的浅灰色，使页面内容更突出。
+  - 右上角同样显示场景编号“02”。
 
-In the final sequence, zoom back out to reveal a cohesive collage of all elements: the rotating spacetime grid, the undulating electromagnetic fields, the QED Lagrangian, and the Feynman diagram floating in the foreground. Fade in an overarching summary text reading 'QED: Unifying Light and Matter Through Gauge Theory,' emphasized by a halo effect. The camera then slowly pulls away, letting the cosmic background re-emerge until each component gracefully dissolves, ending on a single star field reminiscent of the opening shot. A concluding subtitle, 'Finis,' appears, marking the animation's closure and prompting reflection on how fundamental quantum field theory is in describing our universe.
-```
+- **内容呈现**
+  - 左侧区域通过文字详细说明：“切线是曲线在某一点的瞬时方向，在函数 \(f(x)=x^2\) 中，切线反映了曲线在该点的斜率变化。”
+  - 右侧区域构建二维坐标系，设定 x 轴与 y 轴范围，并绘制函数 \(f(x)=x^2\) 的抛物线图。
+  - 在抛物线上，选取切点 \((a, a^2)\)（代码中取 \(a=1\)，即点 (1,1)），用红色圆点标出，并通过动态缩放（基于正弦波的脉动）增加视觉动感。
+
+- **动画与相机运动**
+  - 坐标轴和抛物线均采用逐步绘制（Create）效果展现；文字说明则以渐显（FadeIn）效果依次出现。
+  - 整个镜头保持平稳，重点突出数学图形与文字信息的并列展示。
+
+---
+
+### 【场景三：切线求解步骤展示】
+
+- **背景与分区设计**
+  - 依然采用浅灰背景，适当加入辅助网格（隐约显示）以辅助理解数学推导。
+  - 屏幕被分为左右两部分：左侧专注数学推导步骤，右侧展示图形示意。
+
+- **推导步骤内容**
+  - **步骤1**：确定切点 \((a, a^2)\)
+  - **步骤2**：计算导数并求切点处斜率，写出 \(f'(x)=2x,\quad f'(a)=2a\)
+  - **步骤3**：写出切线的初始表达式：\(y - a^2 = 2a(x - a)\)
+  - **步骤4**：整理得最终切线方程：\(y = 2a(x - a) + a^2\)
+  - 每一步均以 LaTeX 公式形式呈现，确保数学表达清晰规范。
+
+- **右侧图形展示**
+  - 绘制与前一场景类似的坐标系，并重新绘制 \(f(x)=x^2\) 的抛物线。
+  - 用红色圆点标出切点，同时计算出一条斜率为 \(2\) 的直线（通过归一化方向向量 [1,2,0] 得到）并用橙色绘制，直线延伸一定长度以清晰展示切线效果。
+
+- **动画效果与相机调整**
+  - 数学公式依次通过写入（Write）或替换动画（ReplacementTransform）呈现，每个步骤之间留有短暂停顿；同时，右侧图形也以 Create 效果逐步出现。
+  - 镜头在展示过程中可能进行轻微平移或缩放，以确保左侧推导步骤与右侧图形均在焦点范围内。
+
+---
+
+### 【场景四：理论原理与数学公式解析】
+
+- **背景与视觉分区**
+  - 背景改为带有几何纹理的淡灰色，强调数学的严谨性。
+  - 屏幕上部分和下部分分别展示不同的数学公式，右侧可辅以简单箭头或图示说明公式之间的联系。
+
+- **主要数学内容**
+  - 上半部分显示导数的定义公式：
+    \[
+    f'(x)=\lim_{h \to 0}\frac{f(x+h)-f(x)}{h}
+    \]
+  - 下半部分展示点斜式直线方程：
+    \[
+    y - y_1 = m(x - x_1)
+    \]
+  - 两公式之间用一支醒目的箭头连接，直观展示从理论推导到具体应用的过程。
+
+- **动画与相机细节**
+  - 公式均采用 FadeIn 渐显效果依次出现，重点部分可以用高亮（如黄色或橙色）进行强调。
+  - 开场时，镜头可做短暂旋转（约 10°）后平稳移动到公式区域，确保视觉焦点集中于数学公式的推导过程。
+
+---
+
+### 【场景五：总结与回顾】
+
+- **背景与布局**
+  - 背景恢复为深蓝或黑色，并加入柔和渐变或光晕效果，营造出总结时的庄重氛围。
+  - 右上角依旧显示场景编号“05”。
+
+- **回顾内容**
+  - 屏幕上方大字显示“总结”，文字采用金色调，突出重点。
+  - 随后依次列出三个核心公式：
+    - 切点：\((a, a^2)\)
+    - 导数：\(f'(x)=2x\)
+    - 切线方程：\(y=2a(x-a)+a^2\)
+  - 底部展示引导性提问：“你认为切线方程还能帮助我们解决哪些类型的问题？”激发观众思考和互动。
+
+- **动画与相机特效**
+  - 总结文字和公式通过渐显（FadeIn）和书写（Write）动画逐一呈现，镜头在最后阶段进行轻微放大（例如 scale factor 增加到 1.1）或平移，确保观众能集中注意力回顾已讲解的核心内容。
+  - 整体过渡保持与前面场景一致的流畅感，确保画面衔接自然。
+
+---
+
+### 【其他整体要求】
+
+- **统一视觉风格**
+  - 全场景均采用高清渲染，所有数学公式均以 LaTeX 格式呈现，保证文字与公式的清晰度；色调上大体选用冷色调（蓝、灰、白）为主，关键提示（如场景编号、重点标记）采用红、橙、金色突出显示。
+
+- **动画与转场**
+  - 各场景之间建议设置约 1 秒左右的缓冲时间，确保动画切换自然流畅；相机运动（平移、缩放、旋转）与文字、图形出现的时间节点要精心协调，确保每个细节都能在合适的时机捕捉到观众的注意力。

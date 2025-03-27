@@ -61,6 +61,7 @@
    - 如果要使用LinearGradient到从cairo中导入,导入代码`from cairo import LinearGradient`
    - 在调用 axes.get_graph_label() 时，禁止直接传递 font_size 参数。必须在生成标签对象后，再使用 .set_font_size() 方法来调整字体大小。
    - 禁止尝试 from manim.utils.color import LinearGradient。如果需要背景渐变效果，必须使用将颜色列表直接传递给 Rectangle 的 fill_color 参数的替代方法。
+   - 禁止使用 mobject.set_userdata("key", value)。如果需要为 Mobject 存储自定义参数（例如在 updater 中使用的基础透明度、频率等），请通过直接属性赋值 (mobject.key = value) 或 mobject.data["key"] = value 来实现。
 
 8. **最终生成一个视频**：
    - 所有场景应合并为一个连续的动画，生成一个完整的视频文件，确保各场景之间过渡流畅且内容不会相互干扰。
