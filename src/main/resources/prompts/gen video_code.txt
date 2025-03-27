@@ -8,8 +8,8 @@
 
 2. **数学公式与文本显示：**
    - 所有数学公式使用 LaTeX 格式编写且正确显示.
-   - MathTex 仅渲染数学公式，不支持中文或其他 Unicode 文本。中文请使用 Text，避免出现 LaTeX 编译错误.`steps = VGroup(VGroup(Text("步骤1: "), MathTex("(a,a^2)")),VGroup(Text("步骤2: "), MathTex("f'(x)=2x,\\ f'(a)=2a")),VGroup(Text("步骤3: "), MathTex("y-a^2=2a(x-a)")),VGroup(Text("步骤4: "), MathTex("y=2a(x-a)+a^2")))`
-   - 请勿对非向量化对象使用 Write 动画。构造会出现 Write only works for vectorized Mobjects错误.
+   - MathTex 仅渲染数学公式，不支持中文或其他 Unicode 文本。中文请使用 Text，避免出现 LaTeX 编译错误 示例.`steps = VGroup(VGroup(Text("步骤1: "), MathTex("(a,a^2)")),VGroup(Text("步骤2: "), MathTex("f'(x)=2x,\\ f'(a)=2a")),VGroup(Text("步骤3: "), MathTex("y-a^2=2a(x-a)")),VGroup(Text("步骤4: "), MathTex("y=2a(x-a)+a^2")))`
+   - 请勿对非向量化对象使用 Write 动画。因为会出现 Write only works for vectorized Mobjects错误.
    - 对于 Text 对象，应使用 FadeIn 或其他适合非向量化对象的动画。
    - 如果一个 Group 包含混合类型对象，请分别对向量化部分（如 MathTex）和非向量化部分（如 Text）应用适当的动画。
 
@@ -24,21 +24,20 @@
    - 请确保文字和图表始终位于视频显示区域内，不得超出视频边界。
 
 5. **背景、场景编号与坐标一致性：**
-   - 不存在FRAME_WIDTH和FRAME_WIDTH,统一替换为self.camera.frame_width和self.camera.frame_height
+   - 禁止使用FRAME_WIDTH和FRAME_HEIGHT,因为不存在,统一替换为self.camera.frame_width和self.camera.frame_height
    - 在每个新场景开始时，调用 `self.camera.frame.move_to(ORIGIN)` 和 `self.camera.frame.set(width=self.camera.frame_width, height=self.camera.frame_height)` 来重置摄像机位置与缩放
-   - 每个场景都必须使用摄像机的 `frame_width` 和 `frame_height`（或适当加上边距）来创建背景，确保背景完全覆盖屏幕；
-   - 每个场景都创建一个与屏幕对齐的矩形作为背景.bg4 = Rectangle(width=self.camera.frame_width,height=self.camera.frame_height)
+   - 每个场景都必须使用摄像机的 `frame_width` 和 `frame_height`来创建背景，确保背景完全覆盖屏幕；
+   - 每个场景都创建一个与屏幕对齐的矩形作为背景 例如 `bg4 = Rectangle(width=self.camera.frame_width,height=self.camera.frame_height)`
    - 使用 `bg.set_z_index(-1)` 将背景置于最底层，防止遮挡其它元素（如场景编号）；
-   - 对于含有 NumberPlane 的场景（例如场景04），请通过设置 `x_axis_config={"stroke_width": 0}` 和 `y_axis_config={"stroke_width": 0}` 来隐藏中轴线，避免出现不应有的“十字架”。
+   - **背景覆盖与层级问题**：确保每个场景背景的尺寸足以完全覆盖屏幕，并通过设置 `set_z_index(-1)` 保证背景不会遮挡其他元素；同时调整场景编号的位置以避免超出屏幕。
+   - 对于含有 NumberPlane 的场景，请通过设置 `x_axis_config={"stroke_width": 0}` 和 `y_axis_config={"stroke_width": 0}` 来隐藏中轴线，避免出现不应有的“十字架”。
    - 场景编号标签（例如 "01"、"02"、"03"、"04"、"05"）应放置在屏幕右上角，使用如 `to_corner(UR, buff=0.5)` 的方法，确保始终在屏幕内显示，不超出边界。
-   - 如果涉及到函数图像显示,背景统一使用黑色,坐标轴使用白色.并且函数图像需要显示在右侧,需要做显示坐标,但是不需要网格
+   - 如果涉及到函数图像显示,背景统一使用黑色,需要做显示坐标,坐标轴使用白色,但是不需要显示网格,并且函数图像需要显示在右侧.
    - 函数图像与左侧文字垂直居中对齐：把坐标系与曲线一起放入 VGroup，使用 .arrange() 控制内部布局，再用 .move_to([x, left_group.get_center()[1], 0]) 精确把组的垂直中心对齐到左侧文字组 left_group 的中心 Y 坐标。
-   - 禁止直接访问 .opacity 属性或调用 .get_opacity() 方法：对于 Dot 或其他 VMobject，获取透明度应使用 .get_fill_opacity() 或 .get_stroke_opacity()。
-   - 动态透明度动画（如闪烁）的最佳实践：在 updater 中，应根据时间 (ValueTracker 或 scene.time) 和对象预存的参数（基础透明度、频率、相位等）计算目标透明度，然后使用 .set_opacity() 应用该值，避免在 updater 内部读取当前的透明度来做计算
-   - 如果代码中使用了 DARK_GREEN 颜色,必须导入 导入代码`from manim.utils.color.BS381 import DARK_GREEN`
 
 6. **场景合成与清除问题：**
    - 当将多个独立场景合并为一个连续的动画时，必须确保前一部分内容不会残留到后续场景中。
+   - **场景合成与内容残留问题**：合并多个场景时需在每个部分结束后清除前一部分的所有对象并重置相机，确保后续场景不会受到影响。
    - 请在每个部分结束时使用 `FadeOut(Group(*self.mobjects))` 和 `self.clear()` 来清除当前所有对象，并重置相机帧尺寸（例如 `self.camera.frame.set(width=self.camera.frame_width, height=self.camera.frame_height)`) 以保证各场景之间的坐标系统一致。
    - 在 self.play() 中仅传递 Animation 对象；绝不可将 Mobject（包括 always_redraw 生成的对象）直接作为参数
 
@@ -47,8 +46,6 @@
    - **相机属性问题**：在需要动画相机帧时请继承 `MovingCameraScene` 而非普通 `Scene`。
    - **切线绘制方法问题**：避免使用 `axes.get_line_from_point_slope` 时传入错误的关键字参数；请改为手动计算切线端点并使用 `Line` 对象绘制切线。
    - **组对象处理问题**：当清除所有对象时，避免使用 `VGroup(*self.mobjects)`（可能包含非 `VMobject` 对象），建议使用 `Group(*self.mobjects)`。
-   - **场景合成与内容残留问题**：合并多个场景时需在每个部分结束后清除前一部分的所有对象并重置相机，确保后续场景不会受到影响。
-   - **背景覆盖与层级问题**：确保每个场景背景的尺寸足以完全覆盖屏幕，并通过设置 `set_z_index(-1)` 保证背景不会遮挡其他元素；同时调整场景编号的位置以避免超出屏幕。
    - **NumberPlane 显示问题**：为避免出现不必要的中轴线（“十字架”），请在配置 NumberPlane 时将 x 轴和 y 轴的 `stroke_width` 设置为 0。
    - 在 ThreeDScene 中，必须使用 self.set_camera_orientation(phi=..., theta=...) 设置或重置相机视角（默认重置为 phi=0, theta=-PI/2）。禁止直接修改 camera.frame 的旋转属性。
    - 在 MovingCameraScene 或 Scene 中，必须通过操作 self.camera.frame（如 .move_to(), .set_width(), .scale(), .rotate()）来控制相机。重置相机涉及将 camera.frame 恢复到初始位置、大小和零旋转。set_camera_orientation 在这些场景中不可用。
@@ -56,18 +53,21 @@
    - 所以在编写 Manim 代码时，如果需要自定义一个用于跟踪场景内时间的变量，禁止将其命名为 time。请使用如 scene_time 这样的替代名称，并在所有相关地方（初始化、更新器函数、重置逻辑等）保持一致。
    - 在使用 Mobject.arrange() 或 VGroup.arrange() 方法时，用于指定对齐边缘的关键字参数是 aligned_edge，而不是 alignment。
    - **`GrowArrow` 使用限制：** 避免使用 `GrowArrow` 动画，因为它在某些 Manim 版本（如 v0.19.0）中可能因内部 API 变化而导致 `TypeError` (例如涉及 `scale_tips` 参数)。请使用 `Create()` 动画作为创建箭头或其他 `VMobject` 的更可靠的替代方案。
-   - 不要导入Colors,这是一行错误的的代码`from manim.utils.color.color import Colors` Colors不存在,导入后会报错
-   - 禁止使用 BackgroundGradient 类。如果需要背景渐变，请使用 Rectangle 结合 LinearGradient 的方法实现。因为导入BackgroundGradient会导致 Unresolved reference 'BackgroundGradient' 错误
-   - 如果要使用LinearGradient到从cairo中导入,导入代码`from cairo import LinearGradient`
+   - 不要导入Colors,这是一行错误的的代码`from manim.utils.color.color import Colors`因为 Colors不存在,导入后会报错
+   - 禁止使用 BackgroundGradient 类。因为导入BackgroundGradient会导致 Unresolved reference 'BackgroundGradient' 错误
+   - 如果要使用LinearGradient到从cairo中导入,错误导入代码`from cairo import LinearGradient`.
    - 在调用 axes.get_graph_label() 时，禁止直接传递 font_size 参数。必须在生成标签对象后，再使用 .set_font_size() 方法来调整字体大小。
    - 禁止尝试 from manim.utils.color import LinearGradient。如果需要背景渐变效果，必须使用将颜色列表直接传递给 Rectangle 的 fill_color 参数的替代方法。
    - 禁止使用 mobject.set_userdata("key", value)。如果需要为 Mobject 存储自定义参数（例如在 updater 中使用的基础透明度、频率等），请通过直接属性赋值 (mobject.key = value) 或 mobject.data["key"] = value 来实现。
+   - 禁止直接访问 .opacity 属性或调用 .get_opacity() 方法：对于 Dot 或其他 VMobject，获取透明度应使用 .get_fill_opacity() 或 .get_stroke_opacity()。
+   - 动态透明度动画（如闪烁）的最佳实践：在 updater 中，应根据时间 (ValueTracker 或 scene.time) 和对象预存的参数（基础透明度、频率、相位等）计算目标透明度，然后使用 .set_opacity() 应用该值，避免在 updater 内部读取当前的透明度来做计算
+   - 如果代码中使用了 DARK_GREEN 颜色,必须导入 导入代码`from manim.utils.color.BS381 import DARK_GREEN`
 
 8. **最终生成一个视频**：
    - 所有场景应合并为一个连续的动画，生成一个完整的视频文件，确保各场景之间过渡流畅且内容不会相互干扰。
-   - 设置"media_dir": "./#(output_video)", java程序会对#(output_video)进行替换
-   - 场景名称必须是CombinedScene,因为需要生成 CombinedScene.mp4文件
-   - 需要添加main方法,因为我是使用python运行这个命令
+   - 设置"media_dir": "./#(output_video)"指定输出目录, java程序会对#(output_video)进行替换.
+   - 场景名称必须是CombinedScene,因为需要生成 CombinedScene.mp4文件.因为java程序会计算路径,读取文件并上传到文件服务器
+   - 需要添加main方法,因为我是使用python运行生成的脚步,main方法实例如下.
    ```
    if __name__ == "__main__":
     # 基本配置
