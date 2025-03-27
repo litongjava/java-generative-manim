@@ -1,32 +1,44 @@
-请基于以下详细场景提示，生成完整的 Manim Community 版 Python 代码。代码应满足以下要求：
+你是一个Python 的 Manim工程师.请基于以下详细场景提示，生成完整的 Manim Community 版 Python 代码。代码应满足以下要求：
 
 1. **动画元素与输出要求：**
    - 最终生成一个完整的视频，所有场景连续合成在一个视频中；
    - 包含所有预期的动画元素，包括背景、数学公式、动画效果、相机运动和颜色变化。
 
 2. **数学公式与文本显示：**
-   - 所有数学公式使用 LaTeX 格式编写且正确显示；
-   - 任何中文文本请使用 `Text`（或使用 `Tex` 搭配 XeLaTeX 模板），**不要直接放在 `MathTex` 中**，以避免 LaTeX 编译 Unicode 错误。
+   - 所有数学公式使用 LaTeX 格式编写且正确显示.
+   - MathTex 仅渲染数学公式，不支持中文或其他 Unicode 文本。中文请使用 Text，避免出现 LaTeX 编译错误.`steps = VGroup(VGroup(Text("步骤1: "), MathTex("(a,a^2)")),VGroup(Text("步骤2: "), MathTex("f'(x)=2x,\\ f'(a)=2a")),VGroup(Text("步骤3: "), MathTex("y-a^2=2a(x-a)")),VGroup(Text("步骤4: "), MathTex("y=2a(x-a)+a^2")))`
+   - 请勿对非向量化对象使用 Write 动画。构造会出现 Write only works for vectorized Mobjects错误.
+   - 对于 Text 对象，应使用 FadeIn 或其他适合非向量化对象的动画。
+   - 如果一个 Group 包含混合类型对象，请分别对向量化部分（如 MathTex）和非向量化部分（如 Text）应用适当的动画。
 
 3. **代码结构与调试要求：**
    - 代码应遵循 Manim Community 版的编写规范，结构清晰、模块化，便于后续调试和修改；
    - 代码中应包含必要的注释，解释每个主要部分的作用和实现思路。
+   - DARK_GREEN 导入,导入代码`from manim.utils.color.BS381 import DARK_GREEN`
 
 4. **关于动画效果与细节：**
    - 在创建星星时，**不要在 `Dot` 构造函数中传入 `opacity`**；应使用 `.set_opacity()` 方法单独设置透明度。
    - 在创建三维坐标系时，**不要在 `axis_config` 中使用 `opacity`**；如果需要调整透明度，请使用 `stroke_opacity` 参数或在生成后对返回的 `ThreeDAxes` 对象调用 `.set_opacity()`。
-   - 在引用颜色常量（例如 `SILVER`）时，请从 `manim` 顶层直接导入（如 `from manim import SILVER`），而非深层路径。
+   - 尽量不要颜色常量,而是自定义颜色。
 
 5. **背景、场景编号与坐标一致性：**
+   - 不存在FRAME_WIDTH和FRAME_WIDTH,统一替换为self.camera.frame_width和self.camera.frame_height
+   - 在每个新场景开始时，调用 `self.camera.frame.move_to(ORIGIN)` 和 `self.camera.frame.set(width=self.camera.frame_width, height=self.camera.frame_height)` 来重置摄像机位置与缩放
    - 每个场景都必须使用摄像机的 `frame_width` 和 `frame_height`（或适当加上边距）来创建背景，确保背景完全覆盖屏幕；
    - 每个场景都创建一个与屏幕对齐的矩形作为背景.bg4 = Rectangle(width=self.camera.frame_width,height=self.camera.frame_height)
    - 使用 `bg.set_z_index(-1)` 将背景置于最底层，防止遮挡其它元素（如场景编号）；
    - 对于含有 NumberPlane 的场景（例如场景04），请通过设置 `x_axis_config={"stroke_width": 0}` 和 `y_axis_config={"stroke_width": 0}` 来隐藏中轴线，避免出现不应有的“十字架”。
    - 场景编号标签（例如 "01"、"02"、"03"、"04"、"05"）应放置在屏幕右上角，使用如 `to_corner(UR, buff=0.5)` 的方法，确保始终在屏幕内显示，不超出边界。
+   - 如果涉及到函数图像显示,背景统一使用黑色.并且函数图像需要显示在右侧,需要做显示坐标,但是不需要网格
+   - 函数图像与左侧文字垂直居中对齐：把坐标系与曲线一起放入 VGroup，使用 .arrange() 控制内部布局，再用 .move_to([x, left_group.get_center()[1], 0]) 精确把组的垂直中心对齐到左侧文字组 left_group 的中心 Y 坐标。
+   - 禁止直接访问 .opacity 属性或调用 .get_opacity() 方法：对于 Dot 或其他 VMobject，获取透明度应使用 .get_fill_opacity() 或 .get_stroke_opacity()。
+   - 动态透明度动画（如闪烁）的最佳实践：在 updater 中，应根据时间 (ValueTracker 或 scene.time) 和对象预存的参数（基础透明度、频率、相位等）计算目标透明度，然后使用 .set_opacity() 应用该值，避免在 updater 内部读取当前的透明度来做计算
+
 
 6. **场景合成与清除问题：**
    - 当将多个独立场景合并为一个连续的动画时，必须确保前一部分内容不会残留到后续场景中。
    - 请在每个部分结束时使用 `FadeOut(Group(*self.mobjects))` 和 `self.clear()` 来清除当前所有对象，并重置相机帧尺寸（例如 `self.camera.frame.set(width=self.camera.frame_width, height=self.camera.frame_height)`) 以保证各场景之间的坐标系统一致。
+   - 在 self.play() 中仅传递 Animation 对象；绝不可将 Mobject（包括 always_redraw 生成的对象）直接作为参数
 
 7. **错误与问题总结（需在提示中包含）：**
    - **未定义常量问题**：避免使用未定义的 `FRAME_WIDTH` 和 `FRAME_HEIGHT`，改为使用 `self.camera.frame_width` 和 `self.camera.frame_height`。
@@ -36,16 +48,36 @@
    - **场景合成与内容残留问题**：合并多个场景时需在每个部分结束后清除前一部分的所有对象并重置相机，确保后续场景不会受到影响。
    - **背景覆盖与层级问题**：确保每个场景背景的尺寸足以完全覆盖屏幕，并通过设置 `set_z_index(-1)` 保证背景不会遮挡其他元素；同时调整场景编号的位置以避免超出屏幕。
    - **NumberPlane 显示问题**：为避免出现不必要的中轴线（“十字架”），请在配置 NumberPlane 时将 x 轴和 y 轴的 `stroke_width` 设置为 0。
+   - 在 ThreeDScene 中，必须使用 self.set_camera_orientation(phi=..., theta=...) 设置或重置相机视角（默认重置为 phi=0, theta=-PI/2）。禁止直接修改 camera.frame 的旋转属性。
+   - 在 MovingCameraScene 或 Scene 中，必须通过操作 self.camera.frame（如 .move_to(), .set_width(), .scale(), .rotate()）来控制相机。重置相机涉及将 camera.frame 恢复到初始位置、大小和零旋转。set_camera_orientation 在这些场景中不可用。
+   - 这是一行错误的的代码`from manim.utils.color.color import Colors` Colors不存在.
+   - 当在 Manim 场景类（如 Scene, MovingCameraScene 等）中尝试直接给 self.time 赋值（例如 self.time = 0 或 self.time += dt）时，会触发错误`AttributeError: property 'time' of '...' object has no setter`。这是因为 time 是 Manim 场景内部用于跟踪动画时间的一个只读属性或方法，不允许用户直接修改（它没有 "setter"）。
+   - 所以在编写 Manim 代码时，如果需要自定义一个用于跟踪场景内时间的变量，禁止将其命名为 time。请使用如 scene_time 这样的替代名称，并在所有相关地方（初始化、更新器函数、重置逻辑等）保持一致。
+   - 在使用 Mobject.arrange() 或 VGroup.arrange() 方法时，用于指定对齐边缘的关键字参数是 aligned_edge，而不是 alignment。
 
 8. **最终生成一个视频**：
    - 所有场景应合并为一个连续的动画，生成一个完整的视频文件，确保各场景之间过渡流畅且内容不会相互干扰。
    - 设置"media_dir": "./#(output_video)", java程序会对#(output_video)进行替换
    - 场景名称必须是CombinedScene,因为需要生成 CombinedScene.mp4文件
    - 需要添加main方法,因为我是使用python运行这个命令
+   ```
+   if __name__ == "__main__":
+    # 基本配置
+    config.pixel_height = 1080  # 设置分辨率高
+    config.pixel_width = 1920  # 设置分辨率宽
+    config.frame_rate = 30  # 设置帧率
+    config.output_file = "CombinedScene"  # 指定输出文件名（可选，默认类名）
+
+    # 临时设置输出目录
+    config.media_dir = "./#(output_video)"
+    scene = CombinedScene()
+    scene.render()
+   ```
 
 9. 请使用用户的消息语言作为输出语言。
 
 我的版本是 Manim Community v0.19.0.请输出完整的 Python 代码。
+
 
 python代码示例
 已知函数f(x)=x^2,如何求解该函数的切线
