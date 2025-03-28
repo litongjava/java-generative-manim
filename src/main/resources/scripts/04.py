@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from manim import *
-# from manim.utils.color.BS381 import DARK_GREEN # Not used, commented out
-# from cairo import LinearGradient # Not needed if using Manim's gradient fill
 
 # 自定义颜色
 MY_DARK_BLUE = "#1E3A8A"  # 深蓝色
@@ -580,28 +578,6 @@ if __name__ == "__main__":
     # 注意：'#(output_video)' 是一个占位符，需要外部程序（如Java）替换成实际路径
     # 如果直接运行此 Python 脚本，需要手动替换或修改此行
     config.media_dir = "04"
-
-    # 检查并创建目录 (如果直接运行脚本进行本地测试)
-    import os
-    # Replace placeholder with a default local directory name for testing
-    output_dir_placeholder = "04"
-    local_test_dir = "output_video_render" # Define a local directory name
-    actual_output_dir = config.media_dir.replace(output_dir_placeholder, local_test_dir)
-
-    # Ensure the directory exists
-    if not os.path.exists(actual_output_dir):
-        try:
-            os.makedirs(actual_output_dir)
-            print(f"Created output directory: {actual_output_dir}")
-        except OSError as e:
-            print(f"Error creating directory {actual_output_dir}: {e}")
-            # Fallback to current directory if creation fails
-            actual_output_dir = "."
-
-    config.media_dir = actual_output_dir # Update config to use the actual path
-
-    print(f"Rendering scene: {config.output_file}")
-    print(f"Output directory: {config.media_dir}")
 
     scene = CombinedScene()
     scene.render()
