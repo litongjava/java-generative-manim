@@ -5,7 +5,7 @@ from custom_voiceover import custom_voiceover_tts  # 导入自定义 voiceover �
 class CombinedScene(Scene):
     def construct(self):
         # 使用自定义 voiceover 上下文管理器
-        with custom_voiceover_tts("今天天天气怎么样") as tracker:
+        with custom_voiceover_tts("今天天气怎么样") as tracker:
             # 将生成的音频添加到场景中播放
             self.add_sound(tracker.audio_path)
             # 同时展示一段文字，动画时长与旁白音频保持一致
