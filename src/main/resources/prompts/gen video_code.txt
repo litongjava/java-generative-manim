@@ -62,6 +62,7 @@
    - 如果代码中使用了 DARK_GREEN 颜色,必须导入 导入代码`from manim.utils.color.BS381 import DARK_GREEN`
    - Text 类 不再支持 line_width 参数。应该使用 width 参数控制文本的最大宽度，超过指定宽度会自动换行。使用 should_center=True 可让自动换行后的多行文本居中对齐。正确示例：`subtitle = Text("这里是需要显示的长字幕文字",font_size=32,width=config.frame_width - 2,should_center=True)`
 
+## 请使用用户的消息语言作为输出语言。
 
 ## 最终生成一个视频
    - 所有场景应合并为一个连续的动画，生成一个完整的视频文件，确保各场景之间过渡流畅且内容不会相互干扰。
@@ -84,10 +85,74 @@
     scene.render()
    ```
    ```
-## 请使用用户的消息语言作为输出语言。
-我的版本是 Manim Community v0.19.0.请输出完整的 Python 代码。
-
 ## 代码部分功能示例
+### AudioFileClip 的导入示例
+
+在使用 MoviePy 进行音频处理时，您需要正确导入 AudioFileClip 类。请使用以下代码来完成导入：
+```python
+from moviepy import AudioFileClip # Correct import for AudioFileClip
+```
+
+### 必须包含旁边声音
+生成的代码必要包含下面的代码
+必须为视频的特定部分（例如每个场景 Scene 01, Scene 02 等）添加语音旁白。
+所有场景必须包含语音解说。
+提供旁白文本：
+对于需要旁白的每个部分，必须提供确切的旁白文本。例如：在描述场景一时，明确指出 voice_text_scene_01 = "请为以下每个场景使用指定的 voice_text 生成旁白："。
+必须提供的 custom_voiceover_tts 函数来生成音频。
+旁白、屏幕底部字幕（subtitle_voice）和视觉动画需要严格同步。
+使用 with custom_voiceover_tts(...) as tracker: 结构，在 with 块内首先调用 self.add_sound(tracker.audio_path)，使用 AnimationGroup(..., lag_ratio=0.0) 确保字幕和动画同时开始，并根据 tracker.duration 仔细调整动画的 run_time 和必要的 self.wait() 时长，以匹配音频长度。
+确保动画播放、字幕显示与 tracker.duration 精确对齐，并在音频结束前淡出字幕。
+
+```
+from moviepy import AudioFileClip # Correct import for AudioFileClip
+
+CACHE_DIR = "tts_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+class CustomVoiceoverTracker:
+    def __init__(self, audio_path, duration):
+        self.audio_path = audio_path
+        self.duration = duration
+
+
+def get_cache_filename(text):
+    text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    return os.path.join(CACHE_DIR, f"{text_hash}.mp3")
+
+
+@contextmanager
+def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/api/manim/tts"):
+    cache_file = get_cache_filename(text)
+
+    if os.path.exists(cache_file):
+        audio_file = cache_file
+    else:
+        input_text = requests.utils.quote(text)
+        url = f"{base_url}?token={token}&input={input_text}"
+
+        response = requests.get(url, stream=True)
+        if response.status_code != 200:
+            raise Exception(f"TTS 接口错误: {response.status_code} - {response.text}")
+
+        with open(cache_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+        audio_file = cache_file
+
+    clip = AudioFileClip(audio_file)
+    duration = clip.duration
+    clip.close()
+
+    tracker = CustomVoiceoverTracker(audio_file, duration)
+    try:
+        yield tracker
+    finally:
+        pass  # 根据需要决定是否清理缓存
+```
 ### 提示词（Manim CE中声音、字幕与动画的严格同步方法）
 
 在使用 Manim CE 进行动画制作时，若要实现**声音、字幕与动画的严格同步**，必须：
@@ -99,6 +164,7 @@
 **完整正确示例**：
 
 ```python
+from moviepy import AudioFileClip # Correct import for AudioFileClip
 voice_text = "这里是需要朗读并显示的字幕内容"
 
 with custom_voiceover_tts(voice_text) as tracker:
@@ -170,15 +236,8 @@ steps = VGroup(
 )
 ```
 
-### AudioFileClip 的导入示例
-在使用 MoviePy 进行音频处理时，您需要正确导入 AudioFileClip 类。请使用以下代码来完成导入：
-```python
-from moviepy import AudioFileClip
-```
-下面的代码是错误的,下面的代码是错误的,下面的代码是错误的.重要的事情说3遍,一定不要用
-```python
-from moviepy.editor import AudioFileClip
-```
+
+
 ### 水平排列
 如果希望在水平排列时（例如使用 `arrange(RIGHT)`）实现垂直居中对齐，可以直接利用默认行为，无需显式指定 `aligned_edge=CENTER`。这是因为 `Mobject.arrange()` 方法的 `aligned_edge` 参数只接受方向向量（如 `UP`、`DOWN`、`LEFT`、`RIGHT`）或 `ORIGIN`（表示中心对齐），而 `CENTER` 是一个坐标点 `[0, 0, 0]`，不符合要求，因而会引发错误。
 
@@ -402,3 +461,5 @@ if __name__ == "__main__":
     scene.render()
     print("Scene rendering finished.")
 ```
+
+我的版本是 Manim Community v0.19.0.请输出完整的 Python 代码。

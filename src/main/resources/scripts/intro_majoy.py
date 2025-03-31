@@ -1,239 +1,369 @@
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
+import requests
+from contextlib import contextmanager
 from manim import *
+from moviepy import AudioFileClip # Correct import for AudioFileClip
+import hashlib
 
-# 自定义颜色 (根据需求添加)
-# MY_LIGHT_GRAY = "#D1D5DB" # Manim 的 LIGHT_GRAY 已经足够好用
+# 自定义颜色
+MY_DARK_BLUE = "#1E3A8A"  # 深蓝色
+MY_LIGHT_GRAY = "#F3F4F6"  # 浅灰色
+MY_MEDIUM_GRAY = "#D1D5DB"  # 中灰色
+MY_GOLD = "#F59E0B"  # 金色
+MY_ORANGE = "#F97316"  # 橙色
+MY_RED = "#DC2626"  # 红色
+MY_WHITE = "#FFFFFF"  # 白色
+MY_BLACK = "#000000"  # 黑色
+MY_BLUE_D = BLUE_D # Manim's Blue D
+MY_TEAL_E = TEAL_E # Manim's Teal E
+MY_GRAY_B = GRAY_B # Manim's Gray B
+MY_BLUE_C = BLUE_C # Manim's Blue C
+MY_BLUE_A = BLUE_A # Manim's Blue A
 MY_BEIGE = "#F5F5DC" # 米色
-MY_WHITE = "#FFFFFF" # 白色
-MY_BLACK = "#000000" # 黑色
 
-# --- Main Scene Class ---
+# 检查并创建 TTS 缓存目录
+CACHE_DIR = "tts_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+class CustomVoiceoverTracker:
+    """Tracks the audio file path and duration for voiceover."""
+    def __init__(self, audio_path, duration):
+        self.audio_path = audio_path
+        self.duration = duration
+
+def get_cache_filename(text):
+    """Generates a unique filename based on the hash of the text."""
+    text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    return os.path.join(CACHE_DIR, f"{text_hash}.mp3")
+
+@contextmanager
+def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/api/manim/tts"):
+    """
+    Context manager for handling TTS requests, caching, and providing audio info.
+    Uses a simple token for authorization (replace with actual secure method if needed).
+    """
+    cache_file = get_cache_filename(text)
+
+    if os.path.exists(cache_file):
+        audio_file = cache_file
+        # print(f"Using cached TTS audio: {cache_file}")
+    else:
+        # print(f"Requesting TTS for: {text[:50]}...")
+        try:
+            input_text = requests.utils.quote(text)
+            url = f"{base_url}?token={token}&input={input_text}"
+
+            response = requests.get(url, stream=True, timeout=60) # Added timeout
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+            with open(cache_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            audio_file = cache_file
+            # print(f"TTS audio saved to: {cache_file}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"TTS API request failed: {e}")
+            # Fallback: create a dummy tracker with 0 duration? Or raise exception?
+            # For now, let's raise an exception to halt execution if TTS fails
+            raise Exception(f"TTS API Error: {e}") from e
+        except Exception as e:
+            print(f"An error occurred during TTS processing: {e}")
+            raise # Re-raise other exceptions
+
+    # Get duration using moviepy
+    try:
+        with AudioFileClip(audio_file) as clip:
+             duration = clip.duration
+    except Exception as e:
+        print(f"Error reading audio file duration ({audio_file}): {e}")
+        # Fallback or error handling: maybe delete corrupted cache file?
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+        raise Exception(f"Failed to get audio duration: {e}") from e
+
+    tracker = CustomVoiceoverTracker(audio_file, duration)
+    try:
+        yield tracker
+    finally:
+        # Optional: Clean up resources if needed, though cache is usually kept
+        pass
+
+# -----------------------------
+# CombinedScene：整合所有场景并添加字幕和音频
+# -----------------------------
 class CombinedScene(MovingCameraScene):
     """
-    Manim 动画场景，用于展示重庆交通大学两个专业的关键信息速览。
-    包含多个场景，展示不同信息点，并有背景切换和动画效果。
+    Manim scene combining multiple sub-scenes to present information
+    about Chongqing Jiaotong University's majors, with voiceover and subtitles.
     """
     def construct(self):
-        """
-        构建整个动画序列，按顺序播放各个场景。
-        """
-        # 场景〇：开场标题
+        # --- 场景〇：开场标题 ---
         self.play_scene_00()
         self.clear_and_reset()
 
-        # 场景一：港口航道与海岸工程 - 关键年份
+        # --- 场景一：港口航道与海岸工程 - 关键年份 ---
         self.play_scene_01()
         self.clear_and_reset()
 
-        # 场景二：港口航道与海岸工程 - 学分要求
+        # --- 场景二：港口航道与海岸工程 - 学分要求 ---
         self.play_scene_02()
         self.clear_and_reset()
 
-        # 场景三：港口航道与海岸工程 - 专业核心课程
+        # --- 场景三：港口航道与海岸工程 - 专业核心课程 ---
         self.play_scene_03()
         self.clear_and_reset()
 
-        # 场景四：港口航道与海岸工程 - 特定课程信息
+        # --- 场景四：港口航道与海岸工程 - 特定课程信息 ---
         self.play_scene_04()
         self.clear_and_reset()
 
-        # 场景五：水利水电工程 - 关键年份与荣誉
+        # --- 场景五：水利水电工程 - 关键年份与荣誉 ---
         self.play_scene_05()
         self.clear_and_reset()
 
-        # 场景六：水利水电工程 - 学分构成
+        # --- 场景六：水利水电工程 - 学分构成 ---
         self.play_scene_06()
         self.clear_and_reset()
 
-        # 场景七：水利水电工程 - 专业核心课程
+        # --- 场景七：水利水电工程 - 专业核心课程 ---
         self.play_scene_07()
         self.clear_and_reset()
 
-        # 场景八：自主发展计划 - 美育
+        # --- 场景八：自主发展计划 - 美育 ---
         self.play_scene_08()
         self.clear_and_reset()
 
-        # 场景九：结束画面
+        # --- 场景九：结束画面 ---
         self.play_scene_09()
-        # 结束时不需要 clear_and_reset，让最后一幕停留
+        self.clear_and_reset()
 
-    def clear_and_reset(self):
-        """
-        清除当前场景所有对象并重置相机。
-        在场景切换时调用，确保内容不残留，坐标系一致。
-        """
-        # 获取当前场景中所有非 None 的 Mobject
-        valid_mobjects = [m for m in self.mobjects if m is not None]
-        # 清除所有对象的更新器，防止残留的 updater 导致错误
-        for mob in valid_mobjects:
-            mob.clear_updaters()
-        # 将所有有效对象放入一个 Group 中以便一次性 FadeOut
-        all_mobjects_group = Group(*valid_mobjects)
-        if all_mobjects_group: # 只有在场景中有对象时才执行 FadeOut
-            self.play(FadeOut(all_mobjects_group, shift=DOWN * 0.5), run_time=0.5)
-        # Manim 的 self.clear() 会移除场景中的所有 Mobject
-        self.clear()
-        # 重置相机位置到原点 (0, 0, 0)
-        self.camera.frame.move_to(ORIGIN)
-        # 重置相机框架的宽度和高度为配置中的默认值
-        # 使用 config 而不是 self.camera 获取全局配置的宽高，确保一致性
-        self.camera.frame.set(width=config.frame_width, height=config.frame_height)
-        # 短暂等待，让场景切换更平滑
-        self.wait(0.1)
+        self.wait(1) # Final wait before ending
 
     def get_scene_number(self, number_str):
-        """
-        创建并定位场景编号文本。
-        Args:
-            number_str (str): 要显示的场景编号字符串，例如 "01"。
-        Returns:
-            Text: 配置好位置和样式的场景编号 Mobject。
-        """
-        scene_num = Text(number_str, font_size=24, color=MY_WHITE)
-        # 定位到右上角，并设置一定的边距
+        """Creates and positions the scene number label."""
+        scene_num = Text(number_str, font_size=24, color=MY_WHITE, font="思源黑体 CN")
         scene_num.to_corner(UR, buff=0.5)
-        # 设置 Z 轴索引，确保编号在最顶层，不被其他元素遮挡
-        scene_num.set_z_index(10)
+        scene_num.set_z_index(10) # Ensure it's above the background
         return scene_num
 
-    def create_background(self, color=BLACK, opacity=1.0, gradient_colors=None, gradient_direction=DR):
-        """
-        创建覆盖全屏的背景矩形。
-        Args:
-            color: 背景颜色 (如果不是渐变)。
-            opacity: 背景不透明度。
-            gradient_colors: 渐变颜色列表 (例如 [BLUE_D, TEAL_E])。
-            gradient_direction: 渐变方向 (例如 DR)。
-        Returns:
-            Rectangle: 配置好的背景 Mobject。
-        """
+    def create_background(self, color=MY_BLACK, opacity=1.0, gradient_colors=None, gradient_direction=None):
+        """Creates a background rectangle."""
         bg = Rectangle(
             width=config.frame_width,
             height=config.frame_height,
-            stroke_width=0, # 无边框
+            stroke_width=0,
             fill_opacity=opacity
         )
         if gradient_colors:
             bg.set_fill(color=gradient_colors, opacity=opacity)
-            # 注意：Manim CE v0.19.0 中 Rectangle 的渐变是通过 fill_color 参数直接传递列表实现的
-            # 如果需要更复杂的渐变控制，可能需要查阅最新文档或使用 Shader
-            # 简单线性渐变可以直接用颜色列表
-            bg.set_style(fill_color=gradient_colors)
-            # Manim似乎没有直接的gradient_direction参数给Rectangle, 渐变方向可能需要更复杂设置或默认为从上到下
-            # 模拟从左上到右下，可能需要手动创建顶点颜色或使用着色器
-            # 暂时使用默认渐变方向或纯色
-            # 更新：Manim v0.18+ 可以直接在 fill_color 传列表实现渐变，但方向控制可能有限
-            # 为了确保效果，这里使用一个近似的实现方式，或者直接用纯色/简单渐变
-            # 修正：直接将列表传给 fill_color 即可，方向可能需要调整或接受默认
-            bg.fill_color = gradient_colors # 尝试直接赋值
+            # Default gradient direction if not specified (e.g., top-left to bottom-right)
+            if gradient_direction is None:
+                 gradient_direction = np.array([1, -1, 0]) # Example: diagonal
+            # Manim's gradient handling might be direct in fill_color or need shaders
+            # For simple linear gradients, providing a list of colors to fill_color often works.
+            # Let's assume fill_color=[color1, color2] works for basic linear gradients.
+            # If more complex gradients are needed, explore shader options.
+            # Note: Manim CE v0.19 might handle gradients differently. Testing needed.
+            # Using fill_color list is a common approach.
         else:
             bg.set_fill(color=color, opacity=opacity)
 
-        bg.set_z_index(-10) # 置于最底层
+        bg.set_z_index(-10) # Ensure background is behind everything
         return bg
 
-    # --- Scene 00: Opening Title ---
+    def clear_and_reset(self):
+        """Clears all mobjects from the scene and resets the camera."""
+        # Gather all mobjects, filtering out None if any somehow exist
+        valid_mobjects = [m for m in self.mobjects if m is not None]
+
+        # Clear updaters from all mobjects before fading out
+        for mob in valid_mobjects:
+             # Check if the mobject has the clear_updaters method
+             if hasattr(mob, 'clear_updaters') and callable(mob.clear_updaters):
+                 mob.clear_updaters()
+
+        # Create a group of valid mobjects to fade out
+        if valid_mobjects:
+            all_mobjects_group = Group(*valid_mobjects)
+            self.play(FadeOut(all_mobjects_group, shift=DOWN * 0.5), run_time=0.5)
+
+        # Use self.clear() which is the standard way to remove mobjects
+        self.clear()
+
+        # Reset camera position and zoom
+        self.camera.frame.move_to(ORIGIN)
+        # Use config attributes for frame dimensions
+        self.camera.frame.set(width=config.frame_width, height=config.frame_height)
+        # self.wait(0.2) # Short pause after reset
+
     def play_scene_00(self):
-        """场景〇：开场标题"""
-        # 背景：蓝绿色渐变 (左上到右下)
-        # 注意：Manim CE v0.19 对 Rectangle 渐变方向支持可能有限，这里尝试用列表
-        bg0 = self.create_background(gradient_colors=[BLUE_D, TEAL_E])
-        # 如果渐变方向不符合预期，可以考虑用纯色或查找更新的渐变方法
+        """Scene 0: Opening Title"""
+        # Background: Blue-Green Gradient
+        bg0 = self.create_background(gradient_colors=[MY_BLUE_D, MY_TEAL_E], gradient_direction=np.array([1, -1, 0])) # Top-left to bottom-right
         self.add(bg0)
 
-        # 主标题
-        title = Text("重庆交通大学 专业信息速览", font_size=60, color=MY_WHITE)
-        title.move_to(UP * 1.5) # 屏幕中心偏上
+        # Main Title
+        title = Text("重庆交通大学 专业信息速览", font_size=60, color=MY_WHITE, font="思源黑体 CN Bold")
+        title.move_to(UP * 1.0)
 
-        # 副标题
-        subtitle = Text("港口航道与海岸工程 & 水利水电工程", font_size=40, color=LIGHT_GRAY)
+        # Subtitle
+        subtitle = Text("港口航道与海岸工程 & 水利水电工程", font_size=40, color=MY_LIGHT_GRAY, font="思源黑体 CN")
         subtitle.next_to(title, DOWN, buff=0.5)
 
-        # 动画
-        self.play(Write(title), run_time=2)
-        self.play(FadeIn(subtitle, shift=DOWN * 0.5), run_time=1.5)
-        self.wait(1)
+        # Voiceover and Animation Synchronization
+        voice_text_scene_00 = "欢迎观看重庆交通大学专业信息速览。本期我们将聚焦港口航道与海岸工程以及水利水电工程这两个特色专业。"
+        with custom_voiceover_tts(voice_text_scene_00) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
 
-    # --- Scene 01: Port & Channel - Key Years ---
+            subtitle_voice = Text(
+                voice_text_scene_00,
+                font_size=32,
+                color=MY_WHITE,
+                width=config.frame_width - 2,
+                should_center=True,
+                font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            # Animate title and subtitle while voiceover plays
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=2.0),
+                    lag_ratio=0.0 # Start simultaneously
+                ),
+                run_time=2.0 # Duration of the longest animation (Write title)
+            )
+            self.play(FadeIn(subtitle, shift=DOWN * 0.5, run_time=1.5))
+
+            # Wait for the remaining voiceover duration
+            elapsed_time = 2.0 + 1.5 # Time spent on title and subtitle animations
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time for subtitle
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            # Fade out the voiceover subtitle
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
+        self.wait(1) # Pause before clearing
+
     def play_scene_01(self):
-        """场景一：港口航道与海岸工程 - 关键年份"""
-        # 背景：浅灰色
-        bg1 = self.create_background(color=GRAY_B)
+        """Scene 1: Port & Waterway Eng. - Key Years"""
+        bg1 = self.create_background(color=MY_GRAY_B)
         self.add(bg1)
-
-        # 场景编号
         scene_num_01 = self.get_scene_number("01")
         self.add(scene_num_01)
 
-        # 顶部标题
-        title = Text("港口航道与海岸工程", font_size=48, color=MY_WHITE)
+        # Title
+        title = Text("港口航道与海岸工程", font_size=48, color=MY_WHITE, font="思源黑体 CN Bold")
         title.to_edge(UP, buff=1.0)
-        self.play(Write(title), run_time=1.5)
 
-        # 左侧内容
-        year_left = Text("2009年", font_size=36, color=GOLD_E, weight=BOLD)
-        event_left = Text("评为国家级特色专业", font_size=32, color=MY_WHITE)
-        group_left = VGroup(year_left, event_left).arrange(DOWN, buff=0.3, aligned_edge=LEFT) # 左对齐
-        group_left.next_to(title, DOWN, buff=1.0).to_edge(LEFT, buff=2.0)
+        # Left Content (2009)
+        year_left = Text("2009年", font_size=36, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        event_left = Text("评为国家级特色专业", font_size=32, color=MY_WHITE, font="思源黑体 CN")
+        content_left = VGroup(year_left, event_left).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+        content_left.next_to(title, DOWN, buff=1.0).shift(LEFT * 3.5)
 
-        # 右侧内容
-        year_right = Text("2017年", font_size=36, color=GOLD_E, weight=BOLD)
-        # 使用 width 实现长文本自动换行
-        event_right = Text("通过全国工程教育专业认证复评", font_size=32, color=MY_WHITE, width=config.frame_width / 3 - 1) # 减1确保在边界内
-        group_right = VGroup(year_right, event_right).arrange(DOWN, buff=0.3, aligned_edge=LEFT) # 左对齐
-        group_right.next_to(title, DOWN, buff=1.0).to_edge(RIGHT, buff=2.0)
+        # Right Content (2017)
+        year_right = Text("2017年", font_size=36, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        event_right = Text("通过全国工程教育专业认证复评", font_size=32, color=MY_WHITE, font="思源黑体 CN")
+        content_right = VGroup(year_right, event_right).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+        content_right.next_to(title, DOWN, buff=1.0).shift(RIGHT * 3.5)
 
-        # 动画
-        self.play(FadeIn(group_left, shift=LEFT * 2), run_time=1)
-        self.wait(0.5) # 稍作停顿
-        self.play(FadeIn(group_right, shift=RIGHT * 2), run_time=1)
+        # Voiceover and Animation
+        voice_text_scene_01 = "首先来看港口航道与海岸工程。2009年，该专业被评为国家级特色专业。到了2017年，它成功通过了全国工程教育专业认证的复评。"
+        with custom_voiceover_tts(voice_text_scene_01) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_01, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=1.5),
+                    lag_ratio=0.0
+                ),
+                run_time=1.5
+            )
+
+            # Animate content groups
+            self.play(FadeIn(content_left, shift=LEFT * 2), run_time=1.0)
+            self.wait(0.5) # Slight delay before the next item
+            self.play(FadeIn(content_right, shift=RIGHT * 2), run_time=1.0)
+
+            # Wait for remaining audio
+            elapsed_time = 1.5 + 1.0 + 0.5 + 1.0 # Title + left + wait + right
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 02: Port & Channel - Credit Requirement ---
     def play_scene_02(self):
-        """场景二：港口航道与海岸工程 - 学分要求"""
-        # 背景：保持浅灰色
-        bg2 = self.create_background(color=GRAY_B)
+        """Scene 2: Port & Waterway Eng. - Credit Requirement"""
+        bg2 = self.create_background(color=MY_GRAY_B)
         self.add(bg2)
-
-        # 场景编号
         scene_num_02 = self.get_scene_number("02")
         self.add(scene_num_02)
 
-        # 问题文本
-        question = Text("最低毕业学分要求？", font_size=48, color=BLUE_C)
+        # Question Text
+        question = Text("最低毕业学分要求？ 🤔", font_size=48, color=MY_BLUE_C, font="思源黑体 CN")
         question.move_to(UP * 0.5)
 
-        # 答案文本
-        answer = Text("180 学分", font_size=72, color=MY_WHITE, weight=BOLD) # 加粗突出
+        # Answer Text
+        answer = Text("180 学分", font_size=72, color=MY_WHITE, weight=BOLD, font="思源黑体 CN")
         answer.next_to(question, DOWN, buff=0.8)
 
-        # 动画
-        # 注意：Text 是非矢量对象，不能用 Write。改用 FadeIn。
-        self.play(FadeIn(question), run_time=1)
-        self.play(GrowFromCenter(answer), run_time=1)
+        # Voiceover and Animation
+        voice_text_scene_02 = "那么，港口航道与海岸工程专业的最低毕业学分要求是多少呢？答案是 180 学分。"
+        with custom_voiceover_tts(voice_text_scene_02) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_02, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(question, run_time=1.5), # Increased run_time for Write
+                    lag_ratio=0.0
+                ),
+                run_time=1.5
+            )
+            self.play(GrowFromCenter(answer), run_time=1.0)
+
+            # Wait for remaining audio
+            elapsed_time = 1.5 + 1.0 # Question + Answer
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 03: Port & Channel - Core Courses ---
     def play_scene_03(self):
-        """场景三：港口航道与海岸工程 - 专业核心课程"""
-        # 背景：保持浅灰色
-        bg3 = self.create_background(color=GRAY_B)
+        """Scene 3: Port & Waterway Eng. - Core Courses"""
+        bg3 = self.create_background(color=MY_GRAY_B)
         self.add(bg3)
-
-        # 场景编号
         scene_num_03 = self.get_scene_number("03")
         self.add(scene_num_03)
 
-        # 标题
-        title = Text("专业核心课程", font_size=48, color=MY_WHITE)
+        # Title
+        title = Text("专业核心课程 📚", font_size=48, color=MY_WHITE, font="思源黑体 CN Bold")
         title.to_edge(UP, buff=1.0)
-        # 注意：Text 是非矢量对象，不能用 Write。改用 FadeIn。
-        self.play(FadeIn(title), run_time=1)
 
-        # 核心课程列表
+        # Bulleted List
         courses = [
             "渠化工程",
             "港口规划与布置",
@@ -241,259 +371,428 @@ class CombinedScene(MovingCameraScene):
             "工程项目管理",
             "港口与海岸水工建筑物"
         ]
-        # 使用 VGroup 和 FadeIn 实现逐项显示
-        course_mobjects = VGroup(*[Text(course, font_size=36, color=MY_WHITE) for course in courses])
-        # arrange 默认垂直居中对齐，若需左对齐用 aligned_edge=LEFT
-        course_mobjects.arrange(DOWN, buff=0.4, aligned_edge=LEFT)
-        course_mobjects.next_to(title, DOWN, buff=0.8)
-        # 将列表整体移到屏幕中心偏左的位置
-        course_mobjects.move_to(ORIGIN + LEFT * 3)
+        course_list = BulletedList(
+            *courses,
+            dot_color=MY_WHITE,
+            buff=0.4,
+            font_size=36,
+            font="思源黑体 CN"
+        )
+        course_list.set_color(MY_WHITE)
+        course_list.next_to(title, DOWN, buff=0.8).align_to(title, LEFT).shift(RIGHT*1) # Align left
 
-        # 动画：逐项 FadeIn
-        # 使用 AnimationGroup 并设置 lag_ratio 实现逐项延迟出现
-        animations = [FadeIn(item, shift=UP*0.2) for item in course_mobjects]
-        self.play(AnimationGroup(*animations, lag_ratio=0.5), run_time=3) # 总时长3秒，lag_ratio控制间隔
+        # Voiceover and Animation
+        voice_text_scene_03 = "该专业的核心课程包括：渠化工程、港口规划与布置、航道整治、工程项目管理，以及港口与海岸水工建筑物。"
+        with custom_voiceover_tts(voice_text_scene_03) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_03, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=1.0),
+                    lag_ratio=0.0
+                ),
+                run_time=1.0
+            )
+
+            # Animate list items
+            # Calculate run_time per item to fit within audio duration minus title/fadeout
+            total_list_anim_time = max(0.5, tracker.duration - 1.0 - 1.0 - 0.5) # Ensure at least 0.5s, subtract title, fadeout, buffer
+            run_time_per_item = total_list_anim_time / len(courses)
+
+            self.play(
+                AnimationGroup(
+                    *[FadeIn(item, shift=UP * 0.2) for item in course_list],
+                    lag_ratio=0.6 # Adjust lag for better pacing
+                ),
+                run_time=total_list_anim_time # Total time for list animation
+            )
+
+            # Wait if animation finished before audio
+            elapsed_time = 1.0 + total_list_anim_time
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 04: Port & Channel - Specific Course Info ---
     def play_scene_04(self):
-        """场景四：港口航道与海岸工程 - 特定课程信息"""
-        # 背景：保持浅灰色
-        bg4 = self.create_background(color=GRAY_B)
+        """Scene 4: Port & Waterway Eng. - Specific Course Info"""
+        bg4 = self.create_background(color=MY_GRAY_B)
         self.add(bg4)
-
-        # 场景编号
         scene_num_04 = self.get_scene_number("04")
         self.add(scene_num_04)
 
-        # 上半部分信息
-        course_name1 = Text("水工钢筋混凝土结构综合实践", font_size=36, color=MY_WHITE)
-        course_term1 = Text("第 5 学期 开设", font_size=36, color=GOLD_E, weight=BOLD) # 突出显示
-        group_top = VGroup(course_name1, course_term1).arrange(DOWN, buff=0.3, aligned_edge=LEFT)
-        group_top.move_to(UP * 1.5 + LEFT * 2) # 移到左上方
+        # Upper Content
+        course_name_upper = Text("水工钢筋混凝土结构综合实践", font_size=36, color=MY_WHITE, font="思源黑体 CN")
+        course_term = Text("第 5 学期 开设", font_size=40, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        content_upper = VGroup(course_name_upper, course_term).arrange(DOWN, buff=0.3)
+        content_upper.move_to(UP * 1.5)
 
-        # 下半部分信息
-        course_name2 = Text("数学建模课程代码", font_size=36, color=MY_WHITE)
-        course_code2 = Text("19210919", font_size=48, color=GOLD_E, weight=BOLD) # 字号稍大，突出
-        group_bottom = VGroup(course_name2, course_code2).arrange(DOWN, buff=0.3, aligned_edge=LEFT)
-        group_bottom.move_to(DOWN * 1.5 + LEFT * 2) # 移到左下方
+        # Lower Content
+        course_name_lower = Text("数学建模课程代码", font_size=36, color=MY_WHITE, font="思源黑体 CN")
+        course_code = Text("19210919", font_size=48, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        content_lower = VGroup(course_name_lower, course_code).arrange(DOWN, buff=0.3)
+        content_lower.move_to(DOWN * 1.5)
 
-        # 动画
-        self.play(FadeIn(group_top), run_time=1)
-        self.wait(0.5)
-        self.play(FadeIn(group_bottom), run_time=1)
+        # Voiceover and Animation
+        voice_text_scene_04 = "具体来看，“水工钢筋混凝土结构综合实践”这门课在第 5 学期开设。而“数学建模”课程的代码是 19210919。" # Shortened for clarity
+        with custom_voiceover_tts(voice_text_scene_04) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_04, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(FadeIn(subtitle_voice, run_time=0.5))
+
+            # Animate content groups sequentially
+            self.play(FadeIn(content_upper), run_time=1.0)
+            self.wait(0.5) # Pause between items
+            self.play(FadeIn(content_lower), run_time=1.0)
+
+            # Wait for remaining audio
+            elapsed_time = 0.5 + 1.0 + 0.5 + 1.0 # Subtitle + upper + wait + lower
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 05: Hydraulic Engineering - Key Year & Honors ---
     def play_scene_05(self):
-        """场景五：水利水电工程 - 关键年份与荣誉"""
-        # 背景：浅蓝色 (替代水波纹)
-        bg5 = self.create_background(color=BLUE_A) # 使用浅蓝色
+        """Scene 5: Hydraulic & Hydroelectric Eng. - Key Year & Honors"""
+        # Background: Light blue, maybe add subtle texture later if needed
+        bg5 = self.create_background(color=MY_BLUE_A, opacity=0.8) # Slightly transparent blue
         self.add(bg5)
-
-        # 场景编号
         scene_num_05 = self.get_scene_number("05")
         self.add(scene_num_05)
 
-        # 顶部标题
-        title = Text("水利水电工程", font_size=48, color=MY_WHITE)
+        # Title
+        title = Text("水利水电工程 🌊", font_size=48, color=MY_WHITE, font="思源黑体 CN Bold")
         title.to_edge(UP, buff=1.0)
-        # 注意：Text 是非矢量对象，不能用 Write。改用 FadeIn。
-        self.play(FadeIn(title), run_time=1.5)
 
-        # 年份标识
-        year = Text("2013年", font_size=40, color=GOLD_E, weight=BOLD)
-        year.next_to(title, DOWN, buff=0.8)
-        self.play(FadeIn(year), run_time=0.5)
+        # Year Identifier
+        year = Text("2013年", font_size=40, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        year.next_to(title, DOWN, buff=0.6)
 
-        # 荣誉列表
-        honors = [
-            "入选教育部‘卓越工程师教育培养计划’试点专业",
-            "入选重庆市‘三特行动计划’首批特色专业建设点"
-        ]
-        # 使用 width 和 should_center 实现长文本自动换行和居中
-        honor_mobjects = VGroup(*[Text(h, font_size=32, color=MY_WHITE, width=config.frame_width * 0.7, should_center=True) for h in honors])
-        honor_mobjects.arrange(DOWN, buff=0.4)
-        honor_mobjects.next_to(year, DOWN, buff=0.8)
+        # Honors List
+        honor1 = Text("入选教育部‘卓越工程师教育培养计划’试点专业", font_size=32, color=MY_WHITE, font="思源黑体 CN")
+        honor2 = Text("入选重庆市‘三特行动计划’首批特色专业建设点", font_size=32, color=MY_WHITE, font="思源黑体 CN")
+        honors_list = VGroup(honor1, honor2).arrange(DOWN, aligned_edge=LEFT, buff=0.4)
+        honors_list.next_to(year, DOWN, buff=0.6)
 
-        # 动画：逐条 FadeIn 上移
-        animations = [FadeIn(item, shift=UP * 0.2) for item in honor_mobjects]
-        self.play(AnimationGroup(*animations, lag_ratio=0.7), run_time=len(honors)*1.0) # 每条1秒
+        # Voiceover and Animation
+        voice_text_scene_05 = "接下来了解水利水电工程专业。2013年是重要的一年，该专业入选了教育部的“卓越工程师教育培养计划”试点，并成为重庆市“三特行动计划”的首批特色专业建设点。"
+        with custom_voiceover_tts(voice_text_scene_05) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_05, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=1.5),
+                    lag_ratio=0.0
+                ),
+                run_time=1.5
+            )
+            self.play(FadeIn(year), run_time=0.5)
+
+            # Animate honors list
+            self.play(FadeIn(honor1, shift=UP * 0.2), run_time=1.0)
+            self.play(FadeIn(honor2, shift=UP * 0.2), run_time=1.0)
+
+            # Wait for remaining audio
+            elapsed_time = 1.5 + 0.5 + 1.0 + 1.0 # Title + year + honor1 + honor2
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 06: Hydraulic Engineering - Credit Composition ---
     def play_scene_06(self):
-        """场景六：水利水电工程 - 学分构成"""
-        # 背景：保持浅蓝色
-        bg6 = self.create_background(color=BLUE_A)
+        """Scene 6: Hydraulic & Hydroelectric Eng. - Credit Composition"""
+        bg6 = self.create_background(color=MY_BLUE_A, opacity=0.8) # Keep background
         self.add(bg6)
-
-        # 场景编号
         scene_num_06 = self.get_scene_number("06")
         self.add(scene_num_06)
 
-        # 专业标题（保持显示，不加动画）
-        title = Text("水利水电工程", font_size=48, color=MY_WHITE)
+        # Keep the title from the previous scene if desired, or recreate if needed
+        title = Text("水利水电工程 🌊", font_size=48, color=MY_WHITE, font="思源黑体 CN Bold")
         title.to_edge(UP, buff=1.0)
-        self.add(title) # 直接添加，不播放动画
+        self.add(title) # Add title statically
 
-        # 总学分信息
-        total_credit_label = Text("总学分", font_size=40, color=MY_WHITE)
-        total_credit_value = Text("166 + 10 学分", font_size=60, color=GOLD_E, weight=BOLD) # 突出
-        group_total_credit = VGroup(total_credit_label, total_credit_value).arrange(DOWN, buff=0.3)
-        group_total_credit.move_to(UP * 0.5)
+        # Total Credits Info
+        label_total = Text("总学分", font_size=36, color=MY_WHITE, font="思源黑体 CN")
+        value_total = Text("166 + 10 学分", font_size=60, color=MY_GOLD, weight=BOLD, font="思源黑体 CN") # Highlight +10
+        credits_total = VGroup(label_total, value_total).arrange(DOWN, buff=0.3)
+        credits_total.move_to(UP * 0.5)
 
-        # 毕业设计学分信息
-        thesis_credit_label = Text("毕业设计", font_size=40, color=MY_WHITE)
-        thesis_credit_value = Text("12 学分", font_size=60, color=GOLD_E, weight=BOLD) # 字号相近，加粗
-        group_thesis_credit = VGroup(thesis_credit_label, thesis_credit_value).arrange(DOWN, buff=0.3)
-        group_thesis_credit.next_to(group_total_credit, DOWN, buff=1.0)
+        # Graduation Design Credits Info
+        label_design = Text("毕业设计", font_size=36, color=MY_WHITE, font="思源黑体 CN")
+        value_design = Text("12 学分", font_size=60, color=MY_GOLD, weight=BOLD, font="思源黑体 CN")
+        credits_design = VGroup(label_design, value_design).arrange(DOWN, buff=0.3)
+        credits_design.next_to(credits_total, DOWN, buff=1.0)
 
-        # 动画
-        # GrowFromCenter 适用于 VMobject，Text 是非矢量对象，改用 FadeIn 或 ScaleInPlace
-        self.play(FadeIn(group_total_credit, scale=0.5), run_time=1) # 使用 FadeIn 并稍微缩放
-        self.wait(0.5)
-        self.play(FadeIn(group_thesis_credit, scale=0.5), run_time=1)
+        # Voiceover and Animation
+        voice_text_scene_06 = "水利水电工程的总学分要求是 166 加 10 学分。其中，毕业设计占 12 学分。"
+        with custom_voiceover_tts(voice_text_scene_06) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_06, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(FadeIn(subtitle_voice, run_time=0.5))
+
+            # Animate credit info
+            self.play(GrowFromCenter(credits_total), run_time=1.0)
+            self.play(FadeIn(credits_design), run_time=1.0)
+
+            # Wait for remaining audio
+            elapsed_time = 0.5 + 1.0 + 1.0 # Subtitle + total + design
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 07: Hydraulic Engineering - Core Courses ---
     def play_scene_07(self):
-        """场景七：水利水电工程 - 专业核心课程"""
-        # 背景：保持浅蓝色
-        bg7 = self.create_background(color=BLUE_A)
+        """Scene 7: Hydraulic & Hydroelectric Eng. - Core Courses"""
+        bg7 = self.create_background(color=MY_BLUE_A, opacity=0.8) # Keep background
         self.add(bg7)
-
-        # 场景编号
         scene_num_07 = self.get_scene_number("07")
         self.add(scene_num_07)
 
-        # 专业标题（保持显示）
-        title_major = Text("水利水电工程", font_size=48, color=MY_WHITE)
-        title_major.to_edge(UP, buff=1.0)
-        self.add(title_major) # 直接添加
+        # Title
+        title = Text("专业核心课程 🏗️", font_size=48, color=MY_WHITE, font="思源黑体 CN Bold")
+        title.to_edge(UP, buff=1.0)
 
-        # 课程标题
-        title_courses = Text("专业核心课程", font_size=48, color=MY_WHITE)
-        title_courses.next_to(title_major, DOWN, buff=0.8) # 放在专业标题下方
-        # 注意：Text 是非矢量对象，不能用 Write。改用 FadeIn。
-        self.play(FadeIn(title_courses), run_time=1)
-
-        # 核心课程列表
+        # Bulleted List
         courses = [
             "工程水文与水资源综合利用",
             "水工建筑物",
             "水电站",
             "水利工程施工与管理"
         ]
-        # 使用 width 和 should_center 实现长文本自动换行和居中
-        course_mobjects = VGroup(*[Text(course, font_size=36, color=MY_WHITE, width=config.frame_width*0.8, should_center=True) for course in courses])
-        course_mobjects.arrange(DOWN, buff=0.4)
-        course_mobjects.next_to(title_courses, DOWN, buff=0.8)
+        course_list = BulletedList(
+            *courses,
+            dot_color=MY_WHITE,
+            buff=0.4,
+            font_size=36,
+            font="思源黑体 CN"
+        )
+        course_list.set_color(MY_WHITE)
+        course_list.next_to(title, DOWN, buff=0.8).align_to(title, LEFT).shift(RIGHT*1)
 
-        # 动画：逐项 FadeIn
-        animations = [FadeIn(item, shift=UP*0.2) for item in course_mobjects]
-        self.play(AnimationGroup(*animations, lag_ratio=0.5), run_time=3)
+        # Voiceover and Animation
+        voice_text_scene_07 = "水利水电工程的核心课程主要有：工程水文与水资源综合利用、水工建筑物、水电站，以及水利工程施工与管理。"
+        with custom_voiceover_tts(voice_text_scene_07) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_07, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=1.0),
+                    lag_ratio=0.0
+                ),
+                run_time=1.0
+            )
+
+            # Animate list items
+            total_list_anim_time = max(0.5, tracker.duration - 1.0 - 1.0 - 0.5)
+            run_time_per_item = total_list_anim_time / len(courses)
+
+            self.play(
+                AnimationGroup(
+                    *[FadeIn(item, shift=UP * 0.2) for item in course_list],
+                    lag_ratio=0.6
+                ),
+                run_time=total_list_anim_time
+            )
+
+            # Wait if animation finished before audio
+            elapsed_time = 1.0 + total_list_anim_time
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 08: Self-Development Plan - Aesthetics ---
     def play_scene_08(self):
-        """场景八：自主发展计划 - 美育"""
-        # 背景：米色
-        bg8 = self.create_background(color=MY_BEIGE) # 使用米色
+        """Scene 8: Self-Development Plan - Aesthetic Education"""
+        bg8 = self.create_background(color=MY_BEIGE) # Neutral beige background
         self.add(bg8)
-
-        # 场景编号 (白色在米色上可能不清晰，改为黑色)
-        scene_num_08 = self.get_scene_number("08").set_color(MY_BLACK)
+        scene_num_08 = self.get_scene_number("08")
+        # Adjust scene number color for beige background if needed
+        scene_num_08.set_color(MY_BLACK) # Change to black for better contrast
         self.add(scene_num_08)
 
-        # 标题 (使用黑色字体以确保对比度)
-        title = Text("自主发展计划（第二课堂）", font_size=48, color=MY_BLACK)
+        # Title
+        title = Text("自主发展计划（第二课堂）", font_size=48, color=MY_BLACK, font="思源黑体 CN Bold") # Black text
         title.to_edge(UP, buff=1.5)
-        # 注意：Text 是非矢量对象，不能用 Write。改用 FadeIn。
-        self.play(FadeIn(title), run_time=1.5)
 
-        # 内容 (使用黑色和蓝色字体)
-        label = Text("美育", font_size=40, color=BLUE_C) # 蓝色标签
-        practice = Text("美育实践", font_size=40, color=MY_BLACK, weight=BOLD) # 黑色加粗实践内容
-        group_content = VGroup(label, practice).arrange(DOWN, buff=0.4)
-        group_content.next_to(title, DOWN, buff=1.0)
+        # Content
+        label = Text("美育 🎨", font_size=40, color=MY_BLUE_C, font="思源黑体 CN") # Blue label
+        practice = Text("美育实践", font_size=40, color=MY_BLACK, weight=BOLD, font="思源黑体 CN") # Black text
+        content = VGroup(label, practice).arrange(DOWN, buff=0.4)
+        content.next_to(title, DOWN, buff=1.0)
 
-        # 动画
-        self.play(FadeIn(group_content), run_time=1)
-        # 提示：如果需要添加图标，可以使用 SVGMobject 或 ImageMobject 并用 FadeIn 动画
-        # 例如: icon = SVGMobject("path/to/icon.svg").scale(0.5).next_to(group_content, RIGHT)
-        # self.play(FadeIn(icon))
+        # Optional Icon (Example: Paintbrush)
+        # try:
+        #     # Ensure you have the SVG file or use a built-in Mobject
+        #     # icon = SVGMobject("path/to/paintbrush.svg").scale(0.5)
+        #     icon = Circle(radius=0.3, color=MY_ORANGE, fill_opacity=1).next_to(content, RIGHT, buff=0.5) # Placeholder icon
+        # except:
+        #     icon = None # Handle cases where icon loading fails
+        #     print("Warning: Icon could not be loaded/created.")
+
+        # Voiceover and Animation
+        voice_text_scene_08 = "在自主发展计划，也就是第二课堂中，美育实践是其中的一个重要组成部分。"
+        with custom_voiceover_tts(voice_text_scene_08) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
+
+            subtitle_voice = Text(
+                voice_text_scene_08, font_size=32, color=MY_BLACK, # Black subtitle on beige
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    Write(title, run_time=1.5),
+                    lag_ratio=0.0
+                ),
+                run_time=1.5
+            )
+            # Animate content and icon (if exists)
+            anim_group = [FadeIn(content, run_time=1.0)]
+            # if icon:
+            #     anim_group.append(FadeIn(icon, run_time=1.0))
+            self.play(AnimationGroup(*anim_group, lag_ratio=0.0)) # Play simultaneously
+
+            # Wait for remaining audio
+            elapsed_time = 1.5 + 1.0 # Title + Content/Icon
+            remaining_time = tracker.duration - elapsed_time - 1.0 # Subtract fade out time
+            if remaining_time > 0:
+                self.wait(remaining_time)
+
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
         self.wait(1)
 
-    # --- Scene 09: Ending Screen ---
     def play_scene_09(self):
-        """场景九：结束画面"""
-        # 背景：恢复蓝绿色渐变
-        bg9 = self.create_background(gradient_colors=[BLUE_D, TEAL_E])
+        """Scene 9: Ending Screen"""
+        # Background: Restore initial gradient or use a new ending background
+        bg9 = self.create_background(gradient_colors=[MY_BLUE_D, MY_TEAL_E], gradient_direction=np.array([1, -1, 0]))
         self.add(bg9)
+        # Optional: Scene number "09" or hide it
+        # scene_num_09 = self.get_scene_number("09")
+        # self.add(scene_num_09)
 
-        # 场景编号 (可选，如果需要显示)
-        scene_num_09 = self.get_scene_number("09")
-        self.add(scene_num_09)
+        # Ending Text
+        end_text = Text("专业信息速览完毕 ✨", font_size=48, color=MY_WHITE, font="思源黑体 CN")
+        end_text.move_to(ORIGIN + UP * 0.5)
 
-        # 结束语
-        ending_text = Text("专业信息速览完毕 🎉", font_size=48, color=MY_WHITE) # 加个表情
-        ending_text.move_to(ORIGIN)
+        # Optional: Further info text
+        info_text = Text("更多详细信息请查询官方网站", font_size=28, color=MY_LIGHT_GRAY, font="思源黑体 CN")
+        info_text.next_to(end_text, DOWN, buff=0.8)
 
-        # 提示信息
-        more_info_text = Text("更多详细信息请查询官方网站", font_size=28, color=LIGHT_GRAY)
-        more_info_text.next_to(ending_text, DOWN, buff=0.8)
+        # Voiceover and Animation
+        voice_text_scene_09 = "本次重庆交通大学港口航道与海岸工程、水利水电工程的专业信息速览到此结束。感谢您的观看！"
+        with custom_voiceover_tts(voice_text_scene_09) as tracker:
+            self.add_sound(tracker.audio_path, time_offset=0)
 
-        # 动画
-        self.play(FadeIn(ending_text), run_time=1.5)
-        self.play(FadeIn(more_info_text), run_time=1)
+            subtitle_voice = Text(
+                voice_text_scene_09, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True, font="思源黑体 CN"
+            ).to_edge(DOWN, buff=0.5)
 
-        # 相机轻微缩小，营造结束感
-        self.play(self.camera.frame.animate.scale(1.1), run_time=1.5)
-        self.wait(2) # 停留2秒
+            # Animate ending text
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),
+                    FadeIn(end_text, run_time=1.5),
+                    lag_ratio=0.0
+                ),
+                run_time=1.5
+            )
+            self.play(FadeIn(info_text, run_time=1.0))
 
-        # 最终淡出整个场景
-        # 获取当前所有对象进行淡出
-        all_final_mobjects = Group(*self.mobjects)
-        if all_final_mobjects:
-            self.play(FadeOut(all_final_mobjects), run_time=1)
-        self.wait(0.5) # 结束前的短暂等待
+            # Optional: Camera zoom out slightly
+            self.play(self.camera.frame.animate.scale(1.1), run_time=tracker.duration - 1.5 - 1.0 - 1.0) # Scale during remaining time
+
+            # Wait for remaining audio (if scaling animation is shorter)
+            elapsed_time = 1.5 + 1.0 # End text + info text
+            # Adjust remaining time calculation based on whether scaling animation runs concurrently or after
+            # Assuming scaling runs for the rest of the audio duration after text appears:
+            remaining_time = 0 # Already accounted for in scaling run_time
+
+            if remaining_time > 0:
+                 self.wait(remaining_time)
+
+            # Fade out subtitle before final wait
+            self.play(FadeOut(subtitle_voice), run_time=1.0)
+
+        # Final pause before the scene ends
+        self.wait(2)
+        # Fade out the entire scene content
+        self.play(FadeOut(Group(*self.mobjects)), run_time=1.0)
 
 
 # --- Main execution block ---
 if __name__ == "__main__":
-    # 基本配置
-    config.pixel_height = 1080  # 设置分辨率高
-    config.pixel_width = 1920  # 设置分辨率宽
-    config.frame_rate = 30  # 设置帧率
-    config.output_file = "CombinedScene"  # 指定输出文件名
-    config.disable_caching = True # 禁用缓存，确保每次都重新生成
+    # Basic configuration
+    config.pixel_height = 1080  # Set resolution height
+    config.pixel_width = 1920   # Set resolution width
+    config.frame_rate = 30      # Set frame rate
+    config.output_file = "CombinedScene"  # Specify output filename
+    config.disable_caching = True # Disable caching
 
-    # 临时设置输出目录,必须使用#(output_video)
-    # 注意：'#(output_video)' 是一个占位符，需要被外部程序替换为实际路径
-    # 如果直接运行此脚本，需要手动修改为有效目录，例如 "./media_output"
+    # Set output directory - #(output_video) will be replaced by the Java program
     config.media_dir = "./#(output_video)"
 
-    # 检查输出目录是否存在，如果不存在则创建
-    output_dir = config.media_dir
-    if output_dir == "./#(output_video)":
-        print("警告：输出目录未被替换，将尝试在当前目录下创建 './output_video' 文件夹。")
-        output_dir = "./output_video"
-        config.media_dir = output_dir # 更新配置中的路径
+    # Ensure the directory exists
+    if config.media_dir == "./#(output_video)":
+        # If the placeholder is still there, create a default directory for local testing
+        default_output_dir = "./manim_videos"
+        print(f"Warning: Output directory placeholder '#(output_video)' detected. Using default: '{default_output_dir}'")
+        config.media_dir = default_output_dir
+        os.makedirs(config.media_dir, exist_ok=True)
+    else:
+        # If it's a specific path, ensure it exists
+        os.makedirs(config.media_dir, exist_ok=True)
 
-    if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir)
-            print(f"输出目录 '{output_dir}' 已创建。")
-        except OSError as e:
-            print(f"错误：无法创建输出目录 '{output_dir}': {e}")
-            # 可以选择退出或使用默认的 media 目录
-            # config.media_dir = "./media" # 回退到默认
 
-    # 实例化并渲染场景
+    # Set default font for Text objects if needed globally
+    # config.font = "思源黑体 CN" # Example: Set default font
+
+    # Create and render the scene
     scene = CombinedScene()
-    try:
-        scene.render()
-        print(f"场景渲染完成。视频文件位于: {os.path.join(config.media_dir, 'videos', str(config.pixel_width), str(config.frame_rate), config.output_file + '.mp4')}")
-    except Exception as e:
-        print(f"渲染过程中发生错误: {e}")
+    scene.render()
+    print(f"Scene rendering finished. Output saved in: {config.media_dir}")
