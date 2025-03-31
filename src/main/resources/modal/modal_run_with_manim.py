@@ -16,7 +16,7 @@ app = modal.App("example-run-local-script", image=image)
 
 @app.function()
 def run_script():
-  with open("/scripts/manim_a_plus_b.py", "r", encoding="utf-8") as f:
+  with open("/scripts/fx_xx_cario.py", "r", encoding="utf-8") as f:
     script_content = f.read()
     print(script_content)
     exec(script_content, {'__name__': '__main__'})
