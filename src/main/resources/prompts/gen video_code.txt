@@ -92,6 +92,80 @@
 ```python
 from moviepy import AudioFileClip # Correct import for AudioFileClip
 ```
+### 常见颜色导入
+```
+from manim.utils.color.SVGNAMES import BROWN
+```
+
+### 禁止使用 Text.font_exists()
+禁止使用 Text.font_exists() 方法来检查字体是否存在。该方法在此版本中不存在，直接调用将导致 AttributeError: type object 'Text' has no attribute 'font_exists' 错误。
+
+【正确实践】
+必须使用 manimpango 库来检查字体可用性。请遵循以下步骤：
+
+导入库：在 Python 脚本的顶部确保包含 import manimpango。
+
+获取可用字体列表：在设置默认字体之前，调用 available_fonts = manimpango.list_fonts() 来获取当前系统环境下 Pango 可用的所有字体名称列表。
+
+检查字体是否存在：
+
+定义你希望使用的字体名称（例如 desired_font = "Noto Sans CJK SC"）。
+
+使用 if desired_font in available_fonts: 来判断字体是否可用。
+
+条件化设置默认字体：
+
+如果字体存在：在场景的 setup 方法中，安全地调用 Text.set_default(font=desired_font)。
+
+如果字体不存在：
+
+必须打印一条明确的警告信息，告知用户字体缺失。
+
+定义一个备选字体列表（如 fallback_fonts = ["PingFang SC", "Microsoft YaHei", "SimHei"]），遍历该列表检查是否有字体存在于 available_fonts 中。如果找到，则使用第一个找到的备选字体。
+
+如果主要字体和所有备选字体都不存在，则将字体变量设为 None (例如 final_font = None)，并在 setup 方法中添加逻辑，避免使用 None 调用 Text.set_default()，同时告知用户将使用 Manim 的默认字体（可能无法正确显示特定字符，如中文）。
+
+【示例代码片段】
+```
+import manimpango
+from manim import *
+
+# --- 字体检查 ---
+DEFAULT_FONT = "Noto Sans CJK SC"
+available_fonts = manimpango.list_fonts()
+final_font = None
+
+if DEFAULT_FONT in available_fonts:
+    print(f"字体 '{DEFAULT_FONT}' 已找到。")
+    final_font = DEFAULT_FONT
+else:
+    print(f"警告: 字体 '{DEFAULT_FONT}' 未找到。正在尝试备用字体...")
+    fallback_fonts = ["PingFang SC", "Microsoft YaHei", "SimHei", "Arial Unicode MS"]
+    found_fallback = False
+    for font in fallback_fonts:
+        if font in available_fonts:
+            print(f"已切换到备用字体: '{font}'")
+            final_font = font
+            found_fallback = True
+            break
+    if not found_fallback:
+        print(f"警告: 未找到指定的 '{DEFAULT_FONT}' 或任何备用中文字体。将使用 Manim 默认字体，中文可能无法正确显示。")
+        # final_font 保持为 None
+
+class MyScene(Scene):
+    def setup(self):
+        Scene.setup(self)
+        if final_font:
+            Text.set_default(font=final_font)
+        # else: 使用 Manim 默认字体
+
+    def construct(self):
+        # ... 场景内容 ...
+        pass
+
+```
+【目的】
+确保生成的 Manim 代码在 v0.19.0 环境下能够健壮地处理字体设置，避免因错误的 API 调用而崩溃，并能优雅地处理字体缺失的情况，特别是对于需要特定字体（如 CJK 字体）的场景。
 
 ### 必须包含旁边声音
 生成的代码必要包含下面的代码
@@ -236,18 +310,347 @@ steps = VGroup(
 )
 ```
 
-
-
 ### 水平排列
-如果希望在水平排列时（例如使用 `arrange(RIGHT)`）实现垂直居中对齐，可以直接利用默认行为，无需显式指定 `aligned_edge=CENTER`。这是因为 `Mobject.arrange()` 方法的 `aligned_edge` 参数只接受方向向量（如 `UP`、`DOWN`、`LEFT`、`RIGHT`）或 `ORIGIN`（表示中心对齐），而 `CENTER` 是一个坐标点 `[0, 0, 0]`，不符合要求，因而会引发错误。
+在水平排列时（例如使用 `arrange(RIGHT)`）实现垂直居中对齐，可以直接利用默认行为，无需显式指定 `aligned_edge=CENTER`。这是因为 `Mobject.arrange()` 方法的 `aligned_edge` 参数只接受方向向量（如 `UP`、`DOWN`、`LEFT`、`RIGHT`）或 `ORIGIN`（表示中心对齐），而 `CENTER` 是一个坐标点 `[0, 0, 0]`，不符合要求，因而会引发错误。
 
 下面是正确的示例代码：
 ```python
 # 正确示例：
 mobject.arrange(RIGHT)
 ```
+ ### 手动创建列表
+ 必须 手动创建列表.因为 Manim 在尝试将包含中文的文本写入 LaTeX 文件（用于 BulletedList 的某些部分，很可能是默认的项目符号）时遇会到编码问题。虽然 Text 对象本身使用 Pango 渲染中文没问题，但 BulletedList 的默认实现依赖 LaTeX 来创建项目符号 • (通常是 \cdot)，这导致了冲突。
+ 所以在生成的代码中需要使用VGroup替换 BulletedList，其中每一行包含一个 Text 项目符号和一个 Text 列表项.避免 LaTeX 编码问题
 
-## python代码示例
+ ```正确的代码示例如下
+         # --- 手动创建列表 ---
+        course_items_text = [
+            "渠化工程",
+            "港口规划与布置",
+            "航道整治",
+            "工程项目管理",
+            "港口与海岸水工建筑物",
+        ]
+        course_list_group = VGroup()
+        item_font_size = 36
+        bullet_color = MY_WHITE
+        text_color = MY_WHITE
+        line_buff = 0.4 # 行间距
+        bullet_text_buff = 0.2 # 项目符号和文本间距
+
+        for item_text in course_items_text:
+            # 创建项目符号 (使用 Text) 和文本
+            bullet = Text("• ", font_size=item_font_size, color=bullet_color)
+            text = Text(item_text, font_size=item_font_size, color=text_color)
+            # 将符号和文本水平排列
+            line = VGroup(bullet, text).arrange(RIGHT, buff=bullet_text_buff)
+            course_list_group.add(line)
+
+        # 垂直排列所有行，左对齐
+        course_list_group.arrange(DOWN, buff=line_buff, aligned_edge=LEFT)
+        # 定位列表 (与之前 BulletedList 的定位逻辑保持一致)
+        course_list_group.next_to(title, DOWN, buff=0.8).align_to(LEFT)
+        # 微调水平位置，使其大致居中但靠左
+        course_list_group.shift(LEFT * (config.frame_width/4 - course_list_group.get_width()/2))
+ ```
+###【Manim 代码生成规则：禁止向 `Text` 对象传递背景样式参数】
+
+**问题描述:**
+当尝试向 `Text` 类的构造函数传递用于控制其（假想的）背景样式的非预期关键字参数（例如 `bg_stroke_width`, `background_fill_color` 等）时，会触发 `TypeError: Mobject.__init__() got an unexpected keyword argument '...'` 错误。
+
+**原因分析:**
+`Text` 对象本身不直接处理其背景的描边（stroke）或填充（fill）样式。这些参数不属于 `Text` 或其基类 `Mobject` 的有效初始化参数列表。
+
+**正确实践:**
+如果需要为 `Text` 对象添加一个带样式的背景（常见做法是使用 `SurroundingRectangle` 或创建一个普通的 `Rectangle` 并将其放置在文本后面），**必须**将相关的样式参数（如 `stroke_width`, `stroke_color`, `fill_color`, `fill_opacity` 等）直接应用于**创建的背景 Mobject**（例如 `SurroundingRectangle` 实例），**绝对不能**将这些参数传递给 `Text` 对象的构造函数。
+
+**正确代码示例:**
+
+    ```python
+    # 步骤 1: 创建 Text 对象（不含背景参数）
+    subtitle_voice = Text(
+        "这是字幕文本",
+        font_size=28,
+        color=MY_WHITE
+    )
+    # 步骤 2: 创建背景矩形，并将样式应用于它
+    subtitle_bg = SurroundingRectangle(
+        subtitle_voice,
+        buff=0.1,
+        color=MY_BLACK,         # 背景边框颜色 (如果 stroke_width > 0)
+        fill_color=MY_BLACK,    # 背景填充颜色
+        fill_opacity=0.6,       # 背景填充透明度
+        stroke_width=0          # 背景边框宽度 <--- 正确应用在这里！
+    )
+    # 步骤 3: 将文本和背景组合（如果需要一起移动）
+    subtitle_group = VGroup(subtitle_bg, subtitle_voice)
+    ```
+
+**目标:**
+确保生成的代码将 Mobject 的样式参数应用于正确的对象，避免因向构造函数传递无效关键字参数而导致的 `TypeError`。
+
+###【Manim 代码生成规则：正确处理函数图像的特征点（如峰值）】
+
+**问题描述:**
+当尝试在通过 `Axes.plot()` 创建的函数图像对象（通常是 `ParametricFunction` 或 `VMobject`）上调用一个不存在的方法来获取其数学或视觉特征（例如，调用 `.get_peak()` 来获取最高点）时，会触发 `AttributeError: '...' object has no attribute '...'` 错误。
+
+**原因分析:**
+Manim 的 `VMobject`（包括 `ParametricFunction`）代表的是一系列点和线段，它们本身并不存储或提供直接访问其底层函数数学属性（如最大值、最小值、拐点）的方法，如 `get_peak()`。这些特征需要开发者根据原始函数或数据自行计算。
+
+**正确实践:**
+如果需要高亮或指示函数图像上的特定点（如峰值、最小值、特定 x/y 值对应的点）：
+
+1.  **计算坐标:**
+    *   **数学方法:** 如果你知道产生峰值的确切输入值（例如，对于 `y = - (x-a)^2 + b`，峰值在 `x=a`），计算出该输入值对应的输出值。
+    *   **数值方法:** 如果函数复杂，可能需要使用 `scipy.optimize` 或分析 `Mobject.get_points()` 返回的点来找到近似的峰值坐标。
+2.  **坐标转换:** 使用创建图像的 `Axes` 对象的 `.c2p()` (coordinates to point) 方法，将计算出的（输入, 输出）坐标转换为 Manim 场景中的屏幕坐标。
+3.  **创建标记:** 在转换后的屏幕坐标处创建一个新的、可见的 `Mobject` 作为标记（例如 `Dot`, `Cross`, `Star`）。
+4.  **应用动画:** 将需要的高亮动画（如 `Indicate`, `Flash`, `FocusOn`）应用于这个新创建的**标记 Mobject**，而不是原始的函数图像对象。
+
+**正确代码示例**
+    ```python
+    axes = Axes(...)
+    func = lambda x: -(x-2)**2 + 3
+    curve = axes.plot(func)
+
+    # 1. 计算峰值坐标 (x=2, y=3)
+    peak_x = 2
+    peak_y = func(peak_x)
+
+    # 2. 转换坐标
+    peak_screen_coord = axes.c2p(peak_x, peak_y)
+
+    # 3. 创建标记
+    peak_marker = Dot(peak_screen_coord, color=YELLOW, radius=0.1)
+
+    # 4. 应用动画到标记
+    self.add(peak_marker) # 先添加标记使其可见
+    self.play(Indicate(peak_marker))
+    ```
+
+**目标:**
+确保生成的代码通过计算和坐标转换来定位函数图像上的特征点，并使用独立的标记 Mobject 进行高亮，从而避免因调用不存在的方法而产生的 `AttributeError`。
+
+### 【Manim 代码生成规则：禁止向 `MathTex` 或 `Tex` 传递 `font` 参数】
+
+**问题描述:**
+当尝试向 `MathTex` 或 `Tex` 类的构造函数或 `set_default` 方法传递 `font="字体名称"` 参数时，会触发 `TypeError: Mobject.__init__() got an unexpected keyword argument 'font'` 错误。
+
+**原因分析:**
+`MathTex` 和 `Tex` 对象使用 LaTeX 系统进行渲染，它们的字体选择和样式主要由 LaTeX 的 `tex_template`（TeX 模板）控制，而不是像 `Text` 对象那样直接通过 Pango 接受字体名称参数。LaTeX 需要通过特定的包（如 `ctex` 用于中文，`fontspec` 用于指定字体文件）和命令来设置字体。
+
+**正确实践:**
+
+1.  **普通文本字体:** 如果需要为**非数学**的普通文本指定字体（包括中文字体），**必须**使用 `Text` 类。可以通过 `Text("文本", font="字体名称")` 单独设置，或通过 `Text.set_default(font="默认字体名称")` 设置全局默认值。
+2.  **数学公式字体:** 如果需要更改 `MathTex` 或 `Tex` 渲染的**数学公式**的字体（例如使用特定的数学字体包，或者在公式中嵌入中文），**必须**通过修改 Manim 的 `config.tex_template` 或创建一个自定义的 `TexTemplate` 对象来实现。这涉及到在 LaTeX 模板的序言（preamble）中添加 `\usepackage` 命令（例如 `\usepackage{ctex}`）和相关的字体设置命令。**绝对不能**直接向 `MathTex` 或 `Tex` 传递 `font` 参数。
+3.  **`font_size` 参数:** 注意，`font_size` 参数对于 `MathTex` 和 `Tex` 是**有效**的，因为它控制的是最终生成的 SVG 图形的大小，而不是 LaTeX 编译时的字体设置。
+
+**正确代码示例:**
+
+```python
+# 正确：为 Text 设置字体
+chinese_text = Text("你好，世界", font="Noto Sans CJK SC")
+Text.set_default(font="Noto Sans CJK SC")
+
+# 正确：MathTex 使用 font_size
+formula = MathTex("E = mc^2", font_size=48)
+
+# 正确 (概念)：修改 TeX 模板以支持中文公式 (需要在 Manim 配置或代码开头完成)
+# from manim import TexTemplate
+# my_template = TexTemplate(preamble=r"\usepackage{ctex}")
+# config.tex_template = my_template
+# formula_with_chinese = MathTex("能量 E = mc^2", tex_template=my_template)
+```
+
+**目标:**
+确保生成的代码理解 `Text` 和 `MathTex`/`Tex` 在字体处理上的根本区别，避免因向 LaTeX 对象传递无效的 `font` 参数而导致的 `TypeError`。强调字体控制应通过 `Text` 的 `font` 参数或修改 `tex_template` 来完成。
+
+---
+
+### 【Manim 代码生成规则：正确使用 `Axes.input_to_graph_point()`】
+
+**问题描述:**
+当调用 `Axes` 对象的 `input_to_graph_point(x_value, graph_object)` 方法时，如果错误地将第二个参数 `graph_object` 传递为函数在 `x_value` 处的计算结果（即 y 坐标值，一个数字），而不是传递实际的 Manim 图形对象（如 `ParametricFunction` 或 `VMobject`），会触发 `AttributeError: 'numpy.float64' object has no attribute 'point_from_proportion'` 或类似的错误。
+
+**原因分析:**
+`input_to_graph_point` 方法需要在指定的 `graph_object`（图形 Mobject）上查找与输入 `x_value` 相对应的点。它需要访问图形对象的几何信息（如点集、比例函数 `point_from_proportion` 等）来完成这个查找。如果传入的是一个数字（y 坐标），该数字没有这些必要的方法或属性，导致 `AttributeError`。
+
+**正确实践:**
+调用 `Axes.input_to_graph_point()` 时，**必须**确保：
+
+1.  第一个参数是坐标轴上的输入值（通常是 x 值）。
+2.  第二个参数是**实际的 Manim 图形对象**（即通过 `Axes.plot()` 或类似方法创建的 `VMobject`），而不是该图形对象在某个点的函数值。
+
+**正确代码示例:**
+
+```python
+axes = Axes(...)
+my_func = lambda x: x**2
+graph = axes.plot(my_func) # graph is the VMobject
+x_val = 2
+
+# 正确：第二个参数是图形对象 (graph)
+point_on_graph = axes.input_to_graph_point(x_val, graph)
+dot = Dot(point_on_graph)
+```
+
+**目标:**
+确保生成的代码在调用 `Axes.input_to_graph_point()` 时，始终将正确的 Manim 图形对象作为第二个参数传递，避免因传入数值而导致的 `AttributeError`。
+
+---
+### 【Manim 代码生成规则：`get_lines_to_point` 不支持 `dashed_line_config`】
+
+**问题描述:**
+当尝试向 `Axes.get_lines_to_point()` 方法传递 `dashed_line_config` 字典参数以期望生成虚线投影线时，会触发 `TypeError: ...get_line_from_axis_to_point() got an unexpected keyword argument 'dashed_line_config'` 错误。
+
+**原因分析:**
+`get_lines_to_point()` 方法内部调用了 `get_horizontal_line` 和 `get_vertical_line`，这些方法最终依赖于创建标准的 `Line` 对象，而 `Line` 类本身不接受 `dashed_line_config` 参数。该参数无法被正确传递和处理。
+
+**正确实践:**
+如果需要绘制从坐标轴到图形上某点的**虚线**投影线，**必须**手动创建：
+
+1.  获取目标点在坐标系中的坐标 (`point_coord`)。
+2.  计算该点在 x 轴和 y 轴上的投影点坐标 (`point_on_x_axis`, `point_on_y_axis`)，可以使用 `axes.point_to_coords()` 和 `axes.c2p()`。
+3.  使用 `DashedLine` 类分别创建连接投影点和目标点的垂直虚线和水平虚线。
+4.  将这两个 `DashedLine` 对象放入一个 `VGroup` 中（如果需要将它们作为一个整体处理）。
+
+**正确代码示例:**
+
+```python
+axes = Axes(...)
+point = axes.c2p(2, 3)
+x_coord, y_coord = axes.point_to_coords(point)
+point_on_x = axes.c2p(x_coord, 0)
+point_on_y = axes.c2p(0, y_coord)
+
+# 正确：手动创建 DashedLine
+v_line = DashedLine(point_on_x, point, dash_length=0.1, color=RED)
+h_line = DashedLine(point_on_y, point, dash_length=0.1, color=RED)
+lines = VGroup(v_line, h_line)
+
+self.play(Create(lines))
+```
+
+**目标:**
+确保生成的代码在需要绘制虚线投影线时，不使用 `get_lines_to_point` 的 `dashed_line_config` 参数，而是通过手动创建 `DashedLine` 对象来实现。
+
+### 【Manim 代码生成规则：正确使用 `Axes` 的配置参数 (v0.19.0)】
+
+**问题描述:**
+根据 Manim CE v0.19.0 的 `Axes` 类 `__init__` 签名，配置坐标轴（如设置颜色、是否包含数字、数字格式、刻度线等）的参数**不能**直接作为关键字参数传递给 `Axes` 的构造函数。这样做会导致 `TypeError: Mobject.__init__() got an unexpected keyword argument '...'` 或类似的错误，因为这些参数不属于 `Axes` 直接接受的参数，而是需要放入特定的配置字典中。
+
+
+**正确实践:**
+
+1.  **基础参数:** `x_range`, `y_range`, `x_length`, `y_length`, `tips` 可以直接传递。
+2.  **轴配置:** 所有与坐标轴 *本身* 相关的配置（例如 `include_numbers`, `stroke_color`, `stroke_width`, `include_ticks`, `decimal_number_config`, `label_direction` 等）**必须**放入以下字典之一：
+    *   `axis_config`: 用于同时应用于 X 轴和 Y 轴的通用设置。
+    *   `x_axis_config`: 用于仅应用于 X 轴的特定设置（会覆盖 `axis_config` 中的同名设置）。
+    *   `y_axis_config`: 用于仅应用于 Y 轴的特定设置（会覆盖 `axis_config` 中的同名设置）。
+3.  **嵌套配置:** 像小数位数这样的配置需要进一步嵌套，例如 `decimal_number_config={"num_decimal_places": 1}` 必须放在 `axis_config`, `x_axis_config`, 或 `y_axis_config` 内部。
+
+**正确代码示例:**
+
+```python
+# 正确：将轴配置参数放入对应的 config 字典
+axes = Axes(
+    x_range=[0, 10],
+    y_range=[0, 5],
+    x_length=6,
+    y_length=4,
+    tips=False,
+    axis_config={                  # 通用配置
+        "include_numbers": True,
+        "stroke_color": GRAY,
+    },
+    y_axis_config={                # Y轴特定配置 (覆盖通用配置)
+        "stroke_color": BLUE,
+        "decimal_number_config": { # 嵌套配置
+            "num_decimal_places": 1
+        }
+    }
+    # x_axis_config 可以省略，如果只使用通用配置
+)
+```
+
+**目标:**
+确保生成的 Manim 代码严格遵守 `Axes` 的 `__init__` 签名，将所有轴相关的配置项正确地放入 `axis_config`, `x_axis_config`, 或 `y_axis_config` 字典中，避免因传递无效的顶层关键字参数而导致的 `TypeError`。
+
+---
+
+### 【Manim 代码生成规则：正确定位函数图像的特征点（如峰值）】
+
+**问题描述:**
+当尝试在通过 `Axes.plot()` 创建的函数图像对象（通常是 `ParametricFunction` 或 `VMobject`）上调用一个不存在的方法或访问不存在的属性来获取其数学或视觉特征（例如，调用 `.get_peak()` 或访问 `.peak` 来获取最高点）时，会触发 `AttributeError: '...' object has no attribute '...'` 错误。
+
+**原因分析:**
+Manim 的 `VMobject`（包括 `ParametricFunction`）代表的是一系列点和线段，它们本身并不存储或提供直接访问其底层函数数学属性（如最大值、最小值、拐点）的方法或属性，如 `get_peak()` 或 `peak`。这些特征需要开发者根据原始函数或数据自行计算。
+
+**正确实践:**
+如果需要定位或标记函数图像上的特定点（如峰值、最小值、特定 x/y 值对应的点）：
+
+1.  **确定特征点的输入值 (x-value):**
+    *   **数学方法:** 如果你知道产生峰值的确切输入值（例如，对于 `y = - (x-a)^2 + b`，峰值在 `x=a`），直接使用该值。
+    *   **数值方法:** 如果函数复杂，可能需要使用 `scipy.optimize` 或分析函数导数来找到峰值的输入值。
+2.  **计算特征点的输出值 (y-value):** 使用步骤 1 中确定的输入值，代入原始函数 (`lambda` 函数) 计算对应的输出值。
+3.  **坐标转换:** 使用创建图像的 `Axes` 对象的 `.c2p()` (coordinates to point) 方法，将计算出的（输入值, 输出值）坐标转换为 Manim 场景中的**屏幕坐标**。
+4.  **定位/标记:** 使用步骤 3 中得到的**屏幕坐标**来定位其他 Mobject（例如使用 `.move_to()` 或 `.next_to()`），或者在此坐标处创建一个新的标记 Mobject（如 `Dot`）。**绝对不能**尝试在图形对象本身上调用 `.get_peak()` 或类似方法。
+
+**正确代码示例:**
+
+```python
+axes = Axes(...)
+func = lambda x: -(x-2)**2 + 3
+curve = axes.plot(func)
+label = Text("Peak")
+
+# 1. 确定峰值输入值
+peak_x = 2
+# 2. 计算峰值输出值
+peak_y = func(peak_x)
+# 3. 转换坐标
+peak_screen_coord = axes.c2p(peak_x, peak_y) # <--- 使用 axes.c2p()
+# 4. 定位标签
+label.next_to(peak_screen_coord, UP) # <--- 使用计算出的屏幕坐标
+
+self.play(FadeIn(label))
+```
+
+**目标:**
+确保生成的代码通过**手动计算**特征点的数学坐标 (x, y) 并使用 **`axes.c2p()`** 进行坐标转换来定位函数图像上的特征点，然后使用得到的**屏幕坐标**进行 Mobject 定位或标记，从而避免因调用图形对象上不存在的方法或属性（如 `.get_peak()` 或 `.peak`）而产生的 `AttributeError`。
+
+---
+
+### 【Manim 代码生成规则：确保动画类的可用性 (如 `ShowCreationThenFadeOut`)】
+
+**问题描述:**
+在某些 Manim CE 版本或环境中（如 v0.19.0），即使像 `ShowCreationThenFadeOut` 这样的动画类理论上存在，也可能因为导入问题或细微的版本差异导致 `Unresolved reference 'ShowCreationThenFadeOut'` 错误。
+
+**原因分析:**
+虽然 `from manim import *` 通常会导入大部分常用类，但有时某些类可能需要显式导入，或者在特定版本中其名称或可用性发生了变化。
+
+**正确实践:**
+1.  **优先使用核心动画:** 尽量使用 Manim 中最核心、最稳定的动画类，如 `Create`, `FadeIn`, `FadeOut`, `Transform`, `Succession`, `AnimationGroup`, `LaggedStart` 等。
+2.  **替换方案:** 如果遇到某个特定组合动画类（如 `ShowCreationThenFadeOut`, `WriteThenFadeOut` 等）导致 `Unresolved reference` 错误，应使用更基础的动画类组合来手动实现相同的效果。
+    *   例如，要实现“创建然后淡出”的效果，可以使用 `Succession(Create(mobject, run_time=t1), FadeOut(mobject, run_time=t2))` 来替代 `ShowCreationThenFadeOut(mobject, duration=t1+t2)`。需要合理分配 `t1` 和 `t2` 的时间。
+
+**正确代码示例:**
+
+```python
+# 使用 Succession 实现相同效果
+create_time = 0.4
+fade_time = 0.6
+highlight_anim = Succession(
+    Create(highlight_rect, run_time=create_time),
+    FadeOut(highlight_rect, run_time=fade_time)
+)
+self.play(highlight_anim)
+```
+
+**目标:**
+确保生成的 Manim 代码使用稳定且普遍可用的动画类。当遇到特定组合动画类引用错误时，能够使用 `Succession` 或其他基础动画组合来可靠地实现所需效果，避免因动画类不可用导致的 `NameError` 或 `AttributeError`。
+
+## 完整的python代码示例
 ```python
 # -*- coding: utf-8 -*-
 import os
