@@ -650,6 +650,105 @@ self.play(highlight_anim)
 **目标:**
 确保生成的 Manim 代码使用稳定且普遍可用的动画类。当遇到特定组合动画类引用错误时，能够使用 `Succession` 或其他基础动画组合来可靠地实现所需效果，避免因动画类不可用导致的 `NameError` 或 `AttributeError`。
 
+---
+
+**【Manim代码生成规则：处理混合文本和数学（Unicode/LaTeX冲突）】**
+
+**1. 问题描述：**
+在`MathTex`或`Tex`对象中直接包含非ASCII文本（尤其是中文、日文、韩文、表情符号等Unicode字符）会导致 `ValueError: latex error converting to dvi` 或类似的LaTeX编译错误（例如 `LaTeX Error: Unicode character ...`）。
+
+**2. 原因：**
+`MathTex`和`Tex`依赖于LaTeX后端进行渲染。标准的LaTeX配置通常不支持直接输入Unicode字符，除非使用特定的包（例如针对中文的`ctex`）并进行相应设置。相比之下，`Text`对象使用的是Pango渲染引擎，能够正确处理Unicode和各种字体。
+
+**3. 正确做法（必须遵循）：**
+当一行或一个元素需要同时包含普通文本（尤其是Unicode字符）和数学公式时：
+- **分开处理：** 为非数学部分创建一个`Text`对象。
+- **分开处理：** 为纯数学部分创建一个`MathTex`（或`Tex`）对象。
+- **组合：** 使用`VGroup`（或`Group`）将`Text`和`MathTex`对象组合在一起。
+- **排列：** 在`VGroup`上使用`.arrange()`方法（例如，`.arrange(RIGHT, buff=...)`）将文本和数学元素相对于彼此正确地排列（例如，水平排列）。
+- **使用组合：** 将得到的`VGroup`作为完整的一行或元素，用于进一步定位或动画。
+
+**4. 代码示例（正确做法）：**
+```python
+# 正确示例 - 分开处理Text和MathTex，然后组合
+text_part = Text("计算结果： ", font_size=30, color=MY_BLACK)
+math_part = MathTex("E = mc^2", font_size=30, color=MY_BLACK)
+
+# 组合并水平排列
+combined_line = VGroup(text_part, math_part).arrange(RIGHT, buff=0.15)
+
+# 现在可以使用'combined_line'进行定位、动画等操作
+# 例如：combined_line.next_to(previous_element, DOWN)
+# self.play(Write(combined_line))
+```
+
+**6. 目标：**
+确保生成的代码能够正确渲染同时包含普通文本（包括Unicode字符）和基于LaTeX的数学公式的元素，方法是使用适当的Manim类（`Text`用于文本，`MathTex`/`Tex`用于数学公式）并通过`VGroup.arrange()`进行组合，从而防止与Unicode字符相关的LaTeX编译错误。
+
+---
+
+### Manim代码生成规则：在LaTeX数学模式中处理Unicode（例如下标中的`\text{}`）】
+
+**1. 问题描述：**
+在`MathTex`或`Tex`中使用LaTeX命令如`\text{...}`来渲染非ASCII文本（例如，下标中的中文字符，如`MathTex("W_{\text{摩擦}}")`）会导致`ValueError: latex error converting to dvi`或`LaTeX Error: Unicode character ...`错误。
+
+**2. 原因：**
+即使在`MathTex`对象中，`\text{...}`命令也会将渲染工作交给标准的LaTeX文本引擎，而该引擎在没有进行特定配置（例如使用`ctex`）的情况下通常无法处理直接的Unicode输入。这与Manim的`Text`对象不同，后者使用Pango来实现对Unicode的稳健处理。
+
+**3. 正确做法（必须）：**
+当数学符号需要包含非ASCII文本（如下标、上标或嵌入文本）时，应采取以下措施：
+* **分离LaTeX部分：** 仅为纯数学部分创建一个`MathTex`对象（例如，基本符号“W”，运算符“+”、“=”等）。
+* **分离Unicode文本：** 为所有非ASCII文本部分（包括用作下标或上标的部分）单独创建`Text`对象。
+* **缩放与定位：** 手动缩放（通常缩小，例如使用`.scale(0.7)`）并使用`.next_to()`（例如用于下标：`.next_to(base.get_corner(DR), DR, buff=...)`）或`.move_to()`等方法将`Text`对象相对于`MathTex`对象进行定位。*注意：可能需要进行细微的垂直调整（例如使用`.shift(UP*...)`）以使`MathTex`和`Text`对象的基线对齐。*
+* **分组：** 将定位后的`MathTex`和`Text`对象组合成一个`VGroup`，使其作为一个整体来处理。
+* **（可选但推荐）：** 如果这种模式（例如带有文本下标的符号）会频繁使用，建议创建一个辅助函数。
+
+**4. 代码示例（正确 - 带文本下标的符号）：**
+```python
+# 正确示例 - 使用MathTex表示基符号，使用Text表示下标，并进行手动定位
+
+# 定义样式
+base_style = {"font_size": 30, "color": MY_BLACK}
+sub_style = {"font_size": 30, "color": MY_BLACK}  # 基础字号，后续将进行缩放
+
+# 创建组件
+base_symbol = MathTex("W", **base_style)
+subscript = Text("摩擦", **sub_style).scale(0.7)  # 缩放Text对象
+
+# 将下标相对于基符号进行定位
+subscript.next_to(base_symbol.get_corner(DR), DR, buff=0.05)
+# 可选：微调基线
+# subscript.shift(UP * subscript.get_height() * 0.1)
+
+# 将它们组合起来
+final_symbol = VGroup(base_symbol, subscript)
+
+# 现在可以使用'final_symbol'
+# self.play(Write(final_symbol))
+```
+
+**6. 目标：**
+通过确保所有非ASCII文本均使用Manim的`Text`类进行渲染，并手动相对于`MathTex`元素定位，而不是依赖于LaTeX命令如`\text{}`来处理Unicode，从而防止在数学模式下出现LaTeX Unicode错误。
+
+### 【Manim 代码生成规则：正确访问跨方法共享的实例属性】
+
+**问题描述:**
+在包含多个场景逻辑（例如 `play_scene_01`, `play_scene_02` 等）的 Manim 类中，当一个方法（如 `play_scene_02`）创建或获取一个对象（如 `Axes` 实例）并将其存储为实例属性（例如 `self.axes = axes_object`）以供后续方法（如 `play_scene_03`）使用时，如果在后续方法中尝试直接使用局部变量名（如 `axes`）而不是实例属性名（`self.axes`）来访问该对象，会触发 `NameError: name '...' is not defined` 错误。
+
+**原因分析:**
+Python 区分局部变量（在方法内部定义和使用）和实例属性（属于类的实例，通过 `self.` 访问）。当一个对象被赋值给 `self.attribute_name` 后，它就成为了该实例的一部分，必须通过 `self.attribute_name` 来引用，除非在当前方法作用域内重新将其赋值给一个同名的局部变量。
+
+**正确实践:**
+当一个对象（如 `Axes`, `VMobject`, `ValueTracker`, `Text`, `VGroup` 等）需要在一个 Manim 类的不同方法（代表不同动画阶段或场景）之间共享时：
+
+1.  **存储为实例属性:** 在创建或获取该对象的第一个方法结束前，将其赋值给一个实例属性，例如 `self.axes = my_axes_object` 或 `self.graph = my_graph_object`。
+2.  **通过 `self.` 访问:** 在任何需要使用该共享对象的后续方法中，**必须**使用 `self.attribute_name`（例如 `self.axes`, `self.graph`）来访问它。**绝对不能**直接使用没有 `self.` 前缀的名称（除非你明确地在该方法内创建了一个同名的局部变量，但这通常不是共享对象的意图）。
+
+**目标:**
+确保生成的 Manim 代码在跨方法共享对象时，始终使用 `self.attribute_name` 来访问实例属性，从而避免因尝试访问未在当前作用域定义的局部变量而导致的 `NameError`。
+
+---
+
 ## 完整的python代码示例
 ```python
 # -*- coding: utf-8 -*-
@@ -662,14 +761,17 @@ from moviepy import AudioFileClip
 import hashlib
 
 # 自定义颜色
-MY_DARK_BLUE = "#1E3A8A"  # 深蓝色
-MY_LIGHT_GRAY = "#F3F4F6"  # 浅灰色
-MY_MEDIUM_GRAY = "#D1D5DB"  # 中灰色
-MY_GOLD = "#F59E0B"  # 金色
-MY_ORANGE = "#F97316"  # 橙色
-MY_RED = "#DC2626"  # 红色
-MY_WHITE = "#FFFFFF"  # 白色
-MY_BLACK = "#000000"  # 黑色
+MY_DARK_BLUE = "#0a192f"  # 深蓝色
+MY_BLACK = "#000000"      # 黑色
+MY_LIGHT_GRAY = "#E0E0E0" # 浅灰色
+MY_DARK_GRAY = "#666666"  # 深灰色
+MY_BLUE = "#58C4DD"       # 蓝色
+MY_WHITE = "#FFFFFF"      # 白色
+MY_YELLOW = "#FFFF00"     # 黄色
+MY_ORANGE = "#FFA500"     # 橙色
+MY_GOLD = "#FFD700"       # 金色
+MY_RED = "#FF0000"         # 红色
+
 
 CACHE_DIR = "tts_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
