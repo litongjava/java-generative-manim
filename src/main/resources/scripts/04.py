@@ -4,19 +4,21 @@ from manim import *
 
 # 自定义颜色
 MY_DARK_BLUE = "#1E3A8A"  # 深蓝色
-MY_LIGHT_GRAY = "#F3F4F6" # 浅灰色
-MY_MEDIUM_GRAY = "#D1D5DB" # 中灰色
-MY_GOLD = "#F59E0B"      # 金色
-MY_ORANGE = "#F97316"    # 橙色
-MY_RED = "#DC2626"       # 红色
-MY_WHITE = "#FFFFFF"     # 白色
-MY_BLACK = "#000000"     # 黑色
+MY_LIGHT_GRAY = "#F3F4F6"  # 浅灰色
+MY_MEDIUM_GRAY = "#D1D5DB"  # 中灰色
+MY_GOLD = "#F59E0B"  # 金色
+MY_ORANGE = "#F97316"  # 橙色
+MY_RED = "#DC2626"  # 红色
+MY_WHITE = "#FFFFFF"  # 白色
+MY_BLACK = "#000000"  # 黑色
+
 
 class CombinedScene(MovingCameraScene):
     """
     合并所有场景的 Manim 动画。
     用于讲解如何求解函数 f(x) = x^2 的切线方程。
     """
+
     def construct(self):
         # 用于跟踪动画时间的变量
         self.scene_time_tracker = ValueTracker(0)
@@ -39,7 +41,7 @@ class CombinedScene(MovingCameraScene):
 
         # --- 场景五：总结与回顾 ---
         self.play_scene_05()
-        self.clear_and_reset() # 结束前也清理一次
+        self.clear_and_reset()  # 结束前也清理一次
 
     def get_scene_number(self, number_str):
         """创建并定位场景编号"""
@@ -56,13 +58,13 @@ class CombinedScene(MovingCameraScene):
 
         # 停止所有 updater
         for mob in self.mobjects:
-             if mob is not None:
+            if mob is not None:
                 mob.clear_updaters()
 
-        if all_mobjects: # Only play FadeOut if there are objects
-            self.play(FadeOut(all_mobjects, shift=DOWN*0.5), run_time=0.5)
+        if all_mobjects:  # Only play FadeOut if there are objects
+            self.play(FadeOut(all_mobjects, shift=DOWN * 0.5), run_time=0.5)
 
-        self.clear() # 清除 Manim 内部列表
+        self.clear()  # 清除 Manim 内部列表
 
         # 重置相机位置和缩放
         self.camera.frame.move_to(ORIGIN)
@@ -75,14 +77,13 @@ class CombinedScene(MovingCameraScene):
         # 短暂等待，确保过渡自然
         self.wait(0.5)
 
-
     def star_updater(self, star, dt):
         """更新星星透明度的函数，实现闪烁效果"""
         # 获取星星存储的基础透明度和闪烁频率/相位
         # 使用 getattr with default values
-        base_opacity = getattr(star, "base_opacity", 0.5) # 默认基础透明度
-        frequency = getattr(star, "frequency", 0.5) # 默认频率
-        phase = getattr(star, "phase", 0) # 默认相位
+        base_opacity = getattr(star, "base_opacity", 0.5)  # 默认基础透明度
+        frequency = getattr(star, "frequency", 0.5)  # 默认频率
+        phase = getattr(star, "phase", 0)  # 默认相位
 
         # 使用 scene_time_tracker 的值
         current_time = self.scene_time_tracker.get_value()
@@ -107,10 +108,10 @@ class CombinedScene(MovingCameraScene):
             width=config.frame_width,
             height=config.frame_height,
             fill_color=MY_DARK_BLUE,
-            fill_opacity=1.0, # Use float for opacity
+            fill_opacity=1.0,  # Use float for opacity
             stroke_width=0
         )
-        bg1.set_z_index(-10) # 确保背景在最底层
+        bg1.set_z_index(-10)  # 确保背景在最底层
         self.add(bg1)
 
         # 创建星星
@@ -139,11 +140,11 @@ class CombinedScene(MovingCameraScene):
         # 添加星星闪烁的 updater
         # Pass the updater function directly to add_updater
         stars.add_updater(self.star_updater)
-        self.add(stars) # Add stars after setting up updater
+        self.add(stars)  # Add stars after setting up updater
 
         # 2. 场景编号
         scene_num_01 = self.get_scene_number("01")
-        scene_num_01.set_z_index(10) # 确保在顶层
+        scene_num_01.set_z_index(10)  # 确保在顶层
         self.add(scene_num_01)
 
         # 3. 主要内容：标题和副标题
@@ -151,7 +152,7 @@ class CombinedScene(MovingCameraScene):
         title.shift(UP * 2.5)
 
         subtitle_part1 = Text("如何求解函数", font_size=36, color=MY_WHITE)
-        subtitle_part2 = MathTex("f(x)=x^2", font_size=42, color=MY_ORANGE) # LaTeX公式
+        subtitle_part2 = MathTex("f(x)=x^2", font_size=42, color=MY_ORANGE)  # LaTeX公式
         subtitle_part3 = Text("的切线方程 🤔", font_size=36, color=MY_WHITE)
 
         subtitle = VGroup(subtitle_part1, subtitle_part2, subtitle_part3).arrange(RIGHT, buff=0.2)
@@ -159,13 +160,13 @@ class CombinedScene(MovingCameraScene):
 
         # 4. 动画效果
         # Use FadeIn for Text objects
-        self.play(FadeIn(title, shift=UP*0.5), run_time=1.5)
+        self.play(FadeIn(title, shift=UP * 0.5), run_time=1.5)
         self.wait(0.5)
         # 分别对 Text 和 MathTex 应用动画
         self.play(
-            FadeIn(subtitle_part1, shift=RIGHT*0.2),
-            Write(subtitle_part2), # Write works for MathTex (VMobject)
-            FadeIn(subtitle_part3, shift=LEFT*0.2),
+            FadeIn(subtitle_part1, shift=RIGHT * 0.2),
+            Write(subtitle_part2),  # Write works for MathTex (VMobject)
+            FadeIn(subtitle_part3, shift=LEFT * 0.2),
             run_time=2
         )
         self.wait(1)
@@ -179,7 +180,6 @@ class CombinedScene(MovingCameraScene):
         # Animate the value tracker, which the updater uses
         self.play(self.scene_time_tracker.animate.set_value(5), run_time=5, rate_func=linear)
         self.wait(1)
-
 
     def play_scene_02(self):
         """场景二：切线概念与问题背景介绍"""
@@ -196,7 +196,7 @@ class CombinedScene(MovingCameraScene):
 
         # 2. 场景编号
         scene_num_02 = self.get_scene_number("02")
-        scene_num_02.set_color(MY_BLACK) # 浅色背景用黑色字
+        scene_num_02.set_color(MY_BLACK)  # 浅色背景用黑色字
         scene_num_02.set_z_index(10)
         self.add(scene_num_02)
 
@@ -233,16 +233,15 @@ class CombinedScene(MovingCameraScene):
         axes_labels = VGroup(x_label, y_label).set_color(MY_BLACK)
 
         # 绘制函数 f(x) = x^2
-        parabola = axes.plot(lambda x: x**2, x_range=[-3, 3], color=MY_DARK_BLUE, stroke_width=3)
+        parabola = axes.plot(lambda x: x ** 2, x_range=[-3, 3], color=MY_DARK_BLUE, stroke_width=3)
         # Use get_graph_label and then set font size
         parabola_label_obj = axes.get_graph_label(parabola, label="f(x)=x^2", x_val=-2, direction=UL, buff=0.3)
         parabola_label_obj.set_color(MY_DARK_BLUE)
-        parabola_label_obj.set_font_size(24) # Set font size after creation
-
+        parabola_label_obj.set_font_size(24)  # Set font size after creation
 
         # 标记切点 (a, a^2)，取 a=1
         a = 1
-        tangent_point_coords = axes.c2p(a, a**2) # 坐标系到屏幕坐标
+        tangent_point_coords = axes.c2p(a, a ** 2)  # 坐标系到屏幕坐标
         # Don't set opacity in constructor
         tangent_point_dot = Dot(point=tangent_point_coords, color=MY_RED, radius=0.1)
         # Set initial opacity if needed (though default is 1.0)
@@ -265,9 +264,9 @@ class CombinedScene(MovingCameraScene):
         # 渐显文字 (FadeIn for Text, Write for MathTex)
         self.play(FadeIn(text_left_part1), run_time=1)
         self.play(
-            FadeIn(text_left_part2, shift=RIGHT*0.1),
+            FadeIn(text_left_part2, shift=RIGHT * 0.1),
             Write(text_left_part3),
-            FadeIn(text_left_part4, shift=LEFT*0.1),
+            FadeIn(text_left_part4, shift=LEFT * 0.1),
             run_time=1.5
         )
         self.play(FadeIn(text_left_part5), run_time=1)
@@ -284,20 +283,19 @@ class CombinedScene(MovingCameraScene):
         self.play(self.scene_time_tracker.animate.set_value(5), rate_func=linear, run_time=5)
         self.wait(1)
 
-
     def play_scene_03(self):
         """场景三：切线求解步骤展示"""
         # 1. 背景与布局
         # 使用 NumberPlane 创建带网格的背景，但隐藏中轴线并使网格线变淡
         plane = NumberPlane(
-            x_range=[-config.frame_width/2, config.frame_width/2, 1], # Use camera width for range
-            y_range=[-config.frame_height/2, config.frame_height/2, 1], # Use camera height for range
+            x_range=[-config.frame_width / 2, config.frame_width / 2, 1],  # Use camera width for range
+            y_range=[-config.frame_height / 2, config.frame_height / 2, 1],  # Use camera height for range
             x_length=config.frame_width,
             y_length=config.frame_height,
             background_line_style={
                 "stroke_color": MY_MEDIUM_GRAY,
                 "stroke_width": 1,
-                "stroke_opacity": 0.3 # 使网格线隐约可见
+                "stroke_opacity": 0.3  # 使网格线隐约可见
             },
             # 隐藏中轴线 by setting stroke_width to 0
             x_axis_config={"stroke_width": 0},
@@ -308,13 +306,12 @@ class CombinedScene(MovingCameraScene):
         bg3 = Rectangle(
             width=config.frame_width,
             height=config.frame_height,
-            fill_color=MY_LIGHT_GRAY, # 使用浅灰色背景
+            fill_color=MY_LIGHT_GRAY,  # 使用浅灰色背景
             fill_opacity=1.0,
             stroke_width=0
         )
-        bg3.set_z_index(-11) # 在网格后面
+        bg3.set_z_index(-11)  # 在网格后面
         self.add(bg3, plane)
-
 
         # 2. 场景编号
         scene_num_03 = self.get_scene_number("03")
@@ -350,18 +347,19 @@ class CombinedScene(MovingCameraScene):
             x_length=5,
             y_length=4,
             axis_config={"color": MY_BLACK, "include_tip": True, "stroke_width": 2},
-            tips=False, # 简化显示，不显示箭头尖端
+            tips=False,  # 简化显示，不显示箭头尖端
         )
-        parabola_right = axes_right.plot(lambda x: x**2, x_range=[-3, 3], color=MY_DARK_BLUE, stroke_width=3)
+        parabola_right = axes_right.plot(lambda x: x ** 2, x_range=[-3, 3], color=MY_DARK_BLUE, stroke_width=3)
 
         # 切点 a=1
         a_val = 1
-        tangent_point_right_coords = axes_right.c2p(a_val, a_val**2)
+        tangent_point_right_coords = axes_right.c2p(a_val, a_val ** 2)
         tangent_point_right_dot = Dot(point=tangent_point_right_coords, color=MY_RED, radius=0.08)
 
         # 计算切线: y = 2a(x - a) + a^2 = 2(1)(x - 1) + 1^2 = 2x - 2 + 1 = 2x - 1
         # Use axes.plot for the tangent line
-        tangent_line = axes_right.plot(lambda x: 2*a_val*x - a_val**2, x_range=[-1, 3], color=MY_ORANGE, stroke_width=3)
+        tangent_line = axes_right.plot(lambda x: 2 * a_val * x - a_val ** 2, x_range=[-1, 3], color=MY_ORANGE,
+                                       stroke_width=3)
         # Create label and position it
         tangent_label_obj = MathTex("y = 2x - 1", font_size=24, color=MY_ORANGE)
         tangent_label_obj.next_to(tangent_line.get_end(), UR, buff=0.1)
@@ -398,7 +396,6 @@ class CombinedScene(MovingCameraScene):
         )
         self.wait(2)
 
-
     def play_scene_04(self):
         """场景四：理论原理与数学公式解析"""
         # 1. 背景设计：使用 Rectangle with gradient fill
@@ -419,7 +416,6 @@ class CombinedScene(MovingCameraScene):
         # Let's assume direct fill_color works or use set_fill
         bg4.set_z_index(-10)
         self.add(bg4)
-
 
         # 2. 场景编号
         scene_num_04 = self.get_scene_number("04")
@@ -448,12 +444,12 @@ class CombinedScene(MovingCameraScene):
 
         # 连接箭头
         arrow = Arrow(
-            derivative_formula.get_bottom() + DOWN*0.2,
-            lineslope_formula.get_top() + UP*0.2,
+            derivative_formula.get_bottom() + DOWN * 0.2,
+            lineslope_formula.get_top() + UP * 0.2,
             buff=0.1,
             color=MY_ORANGE,
             stroke_width=6,
-            max_tip_length_to_length_ratio=0.15 # Adjusted for better tip size
+            max_tip_length_to_length_ratio=0.15  # Adjusted for better tip size
         )
 
         # 4. 动画与相机细节
@@ -488,7 +484,6 @@ class CombinedScene(MovingCameraScene):
 
         self.wait(2)
 
-
     def play_scene_05(self):
         """场景五：总结与回顾"""
         # 1. 背景设计：深蓝到黑渐变背景
@@ -496,7 +491,7 @@ class CombinedScene(MovingCameraScene):
             width=config.frame_width,
             height=config.frame_height,
             stroke_width=0,
-            fill_color=[MY_DARK_BLUE, MY_BLACK], # 深蓝到黑的渐变
+            fill_color=[MY_DARK_BLUE, MY_BLACK],  # 深蓝到黑的渐变
             fill_opacity=1.0,
             # gradient_direction=DOWN, # Check Manim docs for exact syntax
         )
@@ -507,7 +502,7 @@ class CombinedScene(MovingCameraScene):
 
         # 2. 场景编号
         scene_num_05 = self.get_scene_number("05")
-        scene_num_05.set_color(MY_WHITE) # 深色背景用白色字
+        scene_num_05.set_color(MY_WHITE)  # 深色背景用白色字
         scene_num_05.set_z_index(10)
         self.add(scene_num_05)
 
@@ -556,7 +551,7 @@ class CombinedScene(MovingCameraScene):
         self.wait(1)
 
         # 显示提问
-        self.play(FadeIn(question, shift=UP*0.3), run_time=1.5)
+        self.play(FadeIn(question, shift=UP * 0.3), run_time=1.5)
         self.wait(1)
 
         # 镜头轻微放大，强调回顾内容

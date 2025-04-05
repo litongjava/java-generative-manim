@@ -167,7 +167,8 @@ class MyScene(Scene):
 【目的】
 确保生成的 Manim 代码在 v0.19.0 环境下能够健壮地处理字体设置，避免因错误的 API 调用而崩溃，并能优雅地处理字体缺失的情况，特别是对于需要特定字体（如 CJK 字体）的场景。
 
-### 必须包含旁边声音
+### 旁白要求
+请使用用户的消息语言作为旁白的语言.
 生成的代码必要包含下面的代码
 必须为视频的特定部分（例如每个场景 Scene 01, Scene 02 等）添加语音旁白。
 所有场景必须包含语音解说。
@@ -749,75 +750,366 @@ Python 区分局部变量（在方法内部定义和使用）和实例属性（�
 
 ---
 
-## 完整的python代码示例
+### 【Manim 代码生成规则：正确处理 `MathTex`/`Tex` 中的 `\color[HTML]` 命令】
+
+**1. 问题描述:**
+当在 `MathTex` 或 `Tex` 对象中使用 LaTeX 的 `\color[HTML]{XXXXXX}` 命令来指定颜色时（例如 `MathTex(r"{\color[HTML]{FF0000}Red}")`），可能会导致 `ValueError: latex error converting to dvi` 或 `LaTeX Error: Undefined control sequence \color` 错误。
+
+**2. 原因分析:**
+Manim 使用 LaTeX 编译 `MathTex` 和 `Tex`。标准的 LaTeX 编译器不直接识别 `\color` 命令，尤其是带有 `[HTML]` 选项的语法，除非加载了 `xcolor` 包并启用了 `HTML` 选项。Manim 的默认 TeX 模板可能没有包含 `\usepackage[HTML]{xcolor}`。
+
+**3. 正确做法（必须遵循）：**
+*   **创建自定义 TeX 模板:**
+    *   导入 `from manim import TexTemplate`。
+    *   定义一个 `TexTemplate` 实例，并在其 `preamble` 字符串中**必须**包含 `\usepackage[HTML]{xcolor}`。
+    ```python
+    # --- Custom TeX Template ---
+    my_tex_template = TexTemplate(
+        preamble=r"""
+    \documentclass[preview]{standalone}
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    \usepackage[HTML]{xcolor} %% <<< MUST INCLUDE THIS LINE
+    \usepackage{graphicx}
+    % Add other necessary packages here
+    """
+    )
+    ```
+*   **应用模板:** 在创建任何使用了 `\color[HTML]{...}` 语法的 `MathTex` 或 `Tex` 对象时，**必须**在构造函数中传递 `tex_template=your_custom_template` 参数。
+    ```python
+    # Correct Usage: Apply the custom template
+    MY_RED_HTML = "FF0000" # Store HTML code without '#'
+    colored_math = MathTex(
+        rf"\text{{This is }} {{\color[HTML]{{{MY_RED_HTML}}}red}}",
+        tex_template=my_tex_template # <<< MUST PASS THE TEMPLATE
+    )
+    ```
+*   **(可选) 颜色常量:** 为了方便在 f-string 或 `.format()` 中使用，建议将 HTML 颜色代码存储为不带 `#` 的字符串常量。
+*   **避免不必要的环境:** 通常不需要为 `MathTex` 添加 `tex_environment="center"`，因为它默认就在数学环境中居中。
+
+**4. 目标:**
+确保生成的代码在 `MathTex` 或 `Tex` 中使用 `\color[HTML]{...}` 时，通过提供包含 `\usepackage[HTML]{xcolor}` 的自定义 `TexTemplate`，来防止 LaTeX 编译错误，保证颜色能够正确渲染。
+
+---
+
+好的，这是针对防止 `NameError: name 'Color' is not defined` 错误的提示词规则：
+
+---
+
+### 【Manim 代码生成规则：禁止使用不存在的 `Color()` 类创建颜色】
+
+**1. 问题描述:**
+在 Manim Community (例如 v0.19.0) 中，尝试使用 `my_color = Color("#FF0000")` 或 `my_color = Color("FF0000")` 来从十六进制字符串创建颜色对象会导致 `NameError: name 'Color' is not defined` 错误。
+
+**2. 原因分析:**
+Manim CE 的标准 API 中没有提供一个名为 `Color` 的类，可以直接通过传入十六进制字符串来实例化颜色对象。虽然内部可能有颜色处理类，但它们不应以 `Color(...)` 的形式直接暴露给用户用于此目的。
+
+**3. 正确做法（必须遵循）：**
+*   **使用十六进制字符串:** 当需要定义自定义颜色时，**必须**直接使用包含 `#` 前缀的**字符串**来表示颜色。
+    ```python
+    # 正确：直接使用字符串
+    MY_CUSTOM_RED = "#FF0000"
+    MY_CUSTOM_BLUE = "#0000FF"
+
+    # 在 Mobject 中使用
+    circle = Circle(color=MY_CUSTOM_RED)
+    square = Square(fill_color=MY_CUSTOM_BLUE, fill_opacity=0.5)
+    ```
+*   **使用预定义常量:** 对于标准颜色，可以直接使用 Manim 提供的预定义颜色常量（需要从 `manim` 导入，例如 `from manim import RED, BLUE, GREEN`）。
+    ```python
+    # 正确：使用预定义常量
+    from manim import RED, BLUE
+    text = Text("Hello", color=RED)
+    dot = Dot(point=ORIGIN, color=BLUE)
+    ```
+*   **禁止:** **绝对禁止**生成任何形式的 `variable = Color("...")` 代码来创建颜色。
+
+**4. 目标:**
+确保生成的 Manim 代码使用正确的方式定义和使用颜色（通过十六进制字符串或预定义常量），避免因调用不存在的 `Color()` 类而导致的 `NameError`。
+
+---
+
+### 【Manim 代码生成规则：请勿使用 名为 `ScreenPosition` 的类或函数】
+该标识符在标准 Manim 库中不存在，会导致 `Unresolved reference` (未解析的引用) 错误。
+
+**将 Mobject 固定到屏幕的正确方法:**
+
+要将一个 Mobject（例如 `Text`、`MathTex` 或 `VGroup`）固定到屏幕的特定位置（例如角落或边缘），使其即使在 3D 相机移动、旋转或缩放时也相对于*屏幕*保持静止，请遵循以下模式：
+
+1.  **初始定位:** 使用 `Mobject.to_corner(CORNER_CONSTANT, buff=...)` 或 `Mobject.to_edge(EDGE_CONSTANT, buff=...)` 来初始放置 Mobject。
+2.  **添加 Updater:** 为该 Mobject（或包含它的 `VGroup`）添加一个 updater 函数，该函数在每一帧都重新应用定位方法。
+
+**示例 (将 `my_label` 固定到左上角):**
+
 ```python
+# 创建标签
+my_label = Text("固定标签", font_size=24)
+
+# 1. 初始定位
+my_label.to_corner(UL, buff=0.5) # UL = Upper Left (左上)
+
+# 2. 添加 updater 使其保持固定
+my_label.add_updater(lambda m: m.to_corner(UL, buff=0.5))
+
+# 将标签添加到场景
+self.add(my_label)
+
+# --- 代码后续部分 ---
+# 如果标签被移除或不再需要固定，记得清除 updater
+# my_label.clear_updaters()
+# self.remove(my_label)
+```
+
+**原因:** Updater 函数至关重要，因为它会在该帧中发生任何相机变换*之后*，根据当前的屏幕帧尺寸和相机视图重新计算 Mobject 的位置，从而确保它在视觉上锁定在指定的角落或边缘。
+
+**总结:** 在 3D 场景中，对于需要固定在屏幕上的元素，请始终使用 `Mobject.to_corner()` 或 `Mobject.to_edge()` 结合 `Mobject.add_updater()`。避免使用不存在的类，如 `ScreenPosition`。
+
+### 【Manim 代码生成规则：在定义 `manim.TexTemplate` 时，**请勿**在其 `preamble` (序言/导言区) 字符串参数中包含 `\documentclass{...}` 命令】
+
+**正确方法:**
+
+`manim.TexTemplate` 的 `preamble` 参数*仅*用于放置那些应该出现在 LaTeX 文档中 `\documentclass` 行（由 Manim 自动添加）和 `\begin{document}` 行（也由 Manim 自动添加）*之间*的代码。
+
+`preamble` 通常应包含：
+
+*   加载所需 LaTeX 宏包的 `\usepackage{...}` 命令（例如 `amsmath`, `amssymb`, `xcolor`, `graphicx`, `fontawesome5`, 用于中文支持的 `ctex` 等）。
+*   自定义的 LaTeX 宏定义（`\newcommand`, `\def` 等）。
+*   所包含宏包需要的其他设置命令。
+
+**示例 (正确用法):**
+
+```python
+# 正确的 TexTemplate 定义:
+my_correct_template = TexTemplate(
+    preamble=r"""
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[options]{xcolor}
+\usepackage{graphicx}
+% 在此处添加其他必要的 \usepackage 或 \newcommand 行
+"""
+    # 这里没有 \documentclass！
+)
+
+
+**原因:** Manim 会自动构建完整的 LaTeX 文档结构，包括根据其内部设置或默认值添加合适的 `\documentclass` 命令。如果在 `preamble` 中再次包含它，就会导致 "LaTeX Error: Two \documentclass or \documentstyle commands." (LaTeX 错误：存在两个 \documentclass 或 \documentstyle 命令) 的错误。
+
+**总结:** 确保 `TexTemplate` 的 `preamble` 字符串*仅*包含宏包加载 (`\usepackage`) 和其他设置命令，*绝不*包含 `\documentclass`。
+
+---
+
+### 【Manim 代码生成规则：在调用 `clear_updaters()` 之前，要检查一个 Manim Mobject（包括 `VGroup`）是否有任何活动的 updater，**请勿使用** 名为 `has_updaters()` 的方法。该方法不存在，会导致 `AttributeError`】
+
+**正确方法:**
+
+使用 `Mobject.get_updaters()` 方法。该方法会返回一个包含当前附加到该 Mobject 上的 updater 函数的列表。检查这个列表是否非空（即检查其布尔真值）。
+
+**示例 (正确用法):**
+
+```python
+my_mobject = Circle()
+# ... (可能添加了 updater) ...
+# my_mobject.add_updater(...)
+
+# 正确的检查和清除方式:
+if my_mobject.get_updaters(): # 检查 get_updaters() 返回的列表是否非空
+    print("Mobject 存在 updater，正在清除。")
+    my_mobject.clear_updaters()
+else:
+    print("Mobject 没有 updater。")
+```
+
+**原因:** 标准 Manim API 提供了 `get_updaters()` 来获取 updater 列表。检查返回列表的真值 (`if mobject.get_updaters():`) 是标准的 Pythonic 方式，用以判断它是否包含任何元素（即是否存在任何 updater）。
+
+**总结:** 在调用 `mobject.clear_updaters()` 之前，请始终使用 `if mobject.get_updaters():` 来检查是否存在 updater。避免使用不存在的 `has_updaters()`。
+
+---
+### 【Manim 代码生成规则：禁止使用 `Mobject.set_color_gradient()` 方法】
+
+**1. 问题描述:**
+在 Manim Community (例如 v0.19.0) 中，尝试调用 `mobject.set_color_gradient(color1, color2)` 来为一个已创建的 Mobject 设置颜色渐变，会导致 `TypeError: Mobject.__getattr__.<locals>.setter() takes 2 positional arguments but 3 were given` 或类似的错误。
+
+**2. 原因分析:**
+`set_color_gradient()` 方法在较新版本的 Manim 中已被弃用或其工作方式已改变。直接调用它不再是设置渐变的推荐或有效方式。
+
+**3. 正确做法（必须遵循）：**
+*   **在初始化时设置:** 要为 `VMobject`（如 `Rectangle`, `Circle`, `Polygon` 等）应用填充或描边渐变，**必须**在创建该对象的构造函数（`__init__`）中，将一个包含所需颜色的**列表或元组**直接传递给 `fill_color` 或 `stroke_color` 关键字参数。
+    ```python
+    # 正确示例：在创建 Rectangle 时设置垂直填充渐变
+    MY_COLOR_1 = BLUE
+    MY_COLOR_2 = GREEN
+    gradient_rect = Rectangle(
+        width=4,
+        height=2,
+        stroke_width=0,
+        fill_opacity=1,
+        fill_color=[MY_COLOR_1, MY_COLOR_2] # <--- 正确方式：传递颜色列表
+    )
+
+    # 正确示例：设置描边渐变
+    gradient_circle_stroke = Circle(
+        radius=1,
+        fill_opacity=0,
+        stroke_width=5,
+        stroke_color=(RED, YELLOW) # <--- 正确方式：传递颜色元组
+    )
+    ```
+*   **默认方向:** 直接传递颜色列表/元组（例如 `[color1, color2]`）默认会创建**垂直**方向（从上到下，即 `DOWN`）的渐变。
+*   **其他方向 (可选):** 如果需要非垂直方向的渐变，可以使用 `manim.utils.color.color_gradient` 函数来生成颜色列表，并指定 `direction` 参数，然后将结果传递给 `fill_color` 或 `stroke_color`。但**主要规则**是避免使用 `set_color_gradient` 方法。
+
+**4. 禁止的做法:**
+*   **绝对禁止**在 Mobject 创建之后调用 `mobject.set_color_gradient(color1, color2)`。
+
+**5. 目标:**
+确保生成的 Manim 代码使用当前推荐的、在对象初始化时通过 `fill_color` 或 `stroke_color` 参数传递颜色列表/元组的方式来创建颜色渐变，从而避免因调用已弃用或不兼容的 `set_color_gradient()` 方法而导致的 `TypeError`。
+
+
+### 【Manim 代码生成规则：正确访问和清除 `fixed_in_frame_mobjects` (适用于 `ThreeDScene` 及子类)】
+
+**1. 问题描述:**
+在继承自 `ThreeDScene` 的场景类中（例如 `ThreeDScene` 或用户自定义的子类），尝试直接通过 `self.fixed_in_frame_mobjects` 访问或清除固定在屏幕上的 Mobject 列表，会导致 `AttributeError: 'YourSceneName' object has no attribute 'fixed_in_frame_mobjects'` 错误。
+
+**2. 原因分析:**
+在 `ThreeDScene` 及其子类中，管理固定在屏幕帧上的 Mobject 的列表是**相机对象 (`self.camera`)** 的责任。该列表不直接作为场景实例 (`self`) 的属性存在。
+
+**3. 正确做法（必须遵循）：**
+*   **访问列表:** 当需要获取或迭代固定在屏幕上的 Mobject 列表时，**必须**使用 `self.camera.fixed_in_frame_mobjects`。
+*   **清除列表:** 当需要在场景切换或重置时清除所有固定在屏幕上的 Mobject 时，**必须**调用 `self.camera.fixed_in_frame_mobjects.clear()`。
+*   **组合清除:** 在需要清除场景中*所有* Mobject（包括普通 3D 对象和固定屏幕对象）的函数（如 `clear_and_reset`）中，**必须**同时处理 `self.mobjects` 和 `self.camera.fixed_in_frame_mobjects`。
+
+**4. 代码示例（在 `clear_and_reset` 函数中）：**
+
+```python
+def clear_and_reset(self):
+    """Clears all mobjects (3D and fixed) and resets the camera."""
+
+    # 正确：组合 self.mobjects 和 self.camera.fixed_in_frame_mobjects
+    all_mobs_to_clear = list(self.mobjects) + list(self.camera.fixed_in_frame_mobjects)
+
+    # 清除所有对象的 updaters
+    for mob in all_mobs_to_clear:
+        if mob is not None and hasattr(mob, 'get_updaters') and mob.get_updaters():
+            mob.clear_updaters()
+
+    # （可选）播放淡出动画
+    valid_mobs = [m for m in all_mobs_to_clear if m is not None]
+    if valid_mobs:
+        self.play(FadeOut(Group(*valid_mobs)), run_time=0.5)
+
+    # 清除场景的 3D 对象列表
+    self.mobjects.clear()
+    # 正确：清除相机的固定对象列表
+    self.camera.fixed_in_frame_mobjects.clear()
+
+    # 重置相机视角和状态
+    self.set_camera_orientation(phi=0 * DEGREES, theta=-90 * DEGREES)
+    self.move_camera(frame_center=ORIGIN, zoom=1.0, added_anims=[])
+
+    self.wait(0.1)
+```
+
+**5. 目标:**
+确保生成的代码在 `ThreeDScene` 或其子类中，始终通过 `self.camera.fixed_in_frame_mobjects` 来访问和操作固定在屏幕上的 Mobject 列表，从而避免因尝试访问不存在的 `self.fixed_in_frame_mobjects` 属性而导致的 `AttributeError`。
+
+## 完整的python代码示例
+```
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
 import requests
 from contextlib import contextmanager
 from manim import *
-from moviepy import AudioFileClip
 import hashlib
 
+from moviepy import AudioFileClip
+
 # 自定义颜色
-MY_DARK_BLUE = "#0a192f"  # 深蓝色
-MY_BLACK = "#000000"      # 黑色
-MY_LIGHT_GRAY = "#E0E0E0" # 浅灰色
-MY_DARK_GRAY = "#666666"  # 深灰色
-MY_BLUE = "#58C4DD"       # 蓝色
-MY_WHITE = "#FFFFFF"      # 白色
-MY_YELLOW = "#FFFF00"     # 黄色
-MY_ORANGE = "#FFA500"     # 橙色
-MY_GOLD = "#FFD700"       # 金色
-MY_RED = "#FF0000"         # 红色
+MY_DARK_BLUE = "#1E3A8A"  # 深蓝色
+MY_LIGHT_GRAY = "#F3F4F6"  # 浅灰色
+MY_MEDIUM_GRAY = "#D1D5DB"  # 中灰色
+MY_GOLD = "#F59E0B"  # 金色
+MY_ORANGE = "#F97316"  # 橙色
+MY_RED = "#DC2626"  # 红色
+MY_WHITE = "#FFFFFF"  # 白色
+MY_BLACK = "#000000"  # 黑色
 
-
+# --- TTS Caching Setup ---
 CACHE_DIR = "tts_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 class CustomVoiceoverTracker:
+    """Tracks audio path and duration for TTS."""
+
     def __init__(self, audio_path, duration):
         self.audio_path = audio_path
         self.duration = duration
 
 
 def get_cache_filename(text):
+    """Generates a unique filename based on the text hash."""
     text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
     return os.path.join(CACHE_DIR, f"{text_hash}.mp3")
 
 
 @contextmanager
 def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/api/manim/tts"):
+    """
+    Fetches TTS audio, caches it, and provides path and duration.
+    Usage: with custom_voiceover_tts("text") as tracker: ...
+    """
     cache_file = get_cache_filename(text)
+    audio_file = cache_file  # Initialize audio_file
 
     if os.path.exists(cache_file):
         audio_file = cache_file
+        print(f"Using cached TTS for: {text[:30]}...")
     else:
-        input_text = requests.utils.quote(text)
-        url = f"{base_url}?token={token}&input={input_text}"
+        print(f"Requesting TTS for: {text[:30]}...")
+        try:
+            # URL encode the input text to handle special characters
+            input_text_encoded = requests.utils.quote(text)
+            url = f"{base_url}?token={token}&input={input_text_encoded}"
 
-        response = requests.get(url, stream=True)
-        if response.status_code != 200:
-            raise Exception(f"TTS 接口错误: {response.status_code} - {response.text}")
+            response = requests.get(url, stream=True, timeout=60)  # Added timeout
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
-        with open(cache_file, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+            with open(cache_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            audio_file = cache_file
+            print("TTS downloaded and cached.")
 
-        audio_file = cache_file
+        except requests.exceptions.RequestException as e:
+            print(f"TTS API request failed: {e}")
+            # Fallback: create a dummy tracker with zero duration
+            tracker = CustomVoiceoverTracker(None, 0)
+            yield tracker
+            return  # Exit context manager
 
-    clip = AudioFileClip(audio_file)
-    duration = clip.duration
-    clip.close()
+    # Ensure audio file exists before processing with MoviePy
+    if audio_file and os.path.exists(audio_file):
+        try:
+            clip = AudioFileClip(audio_file)
+            duration = clip.duration
+            clip.close()
+            print(f"Audio duration: {duration:.2f}s")
+            tracker = CustomVoiceoverTracker(audio_file, duration)
+        except Exception as e:
+            print(f"Error processing audio file {audio_file}: {e}")
+            # Fallback if audio file is corrupted or invalid
+            tracker = CustomVoiceoverTracker(None, 0)
+    else:
+        # Fallback if audio file was not created or found
+        print(f"TTS audio file not found or not created: {audio_file}")
+        tracker = CustomVoiceoverTracker(None, 0)
 
-    tracker = CustomVoiceoverTracker(audio_file, duration)
     try:
         yield tracker
     finally:
-        pass  # 根据需要决定是否清理缓存
+        # No cleanup needed here as we are caching
+        pass
 
 
 # -----------------------------
@@ -829,46 +1121,96 @@ class CombinedScene(MovingCameraScene):
     """
 
     def construct(self):
+        # Use a scene-specific time tracker for updaters if needed outside TTS timing
         self.scene_time_tracker = ValueTracker(0)
-        # --- 场景一：欢迎介绍与星空背景 ---
+
+        # --- Play Scenes Sequentially ---
         self.play_scene_01()
         self.clear_and_reset()
+
+        self.play_scene_02()
+        self.clear_and_reset()
+
+        self.play_scene_03()
+        self.clear_and_reset()
+
+        self.play_scene_04()
+        self.clear_and_reset()
+
+        self.play_scene_05()
+        self.clear_and_reset()
+
+        # End of animation message
+        final_message = Text("动画结束，感谢观看！ 😄", font_size=48, color=MY_WHITE)
+        bg_final = Rectangle(width=config.frame_width, height=config.frame_height, fill_color=MY_BLACK, fill_opacity=1,
+                             stroke_width=0).set_z_index(-10)
+        self.add(bg_final)
+        self.play(FadeIn(final_message))
+        self.wait(2)
 
     def get_scene_number(self, number_str):
         """创建并定位场景编号"""
         scene_num = Text(number_str, font_size=24, color=MY_WHITE)
-        scene_num.to_corner(UR, buff=0.5)
+        # Ensure the scene number is always within bounds
+        scene_num.to_corner(UR, buff=0.3)  # Use smaller buff if needed
+        scene_num.set_z_index(10)  # Ensure it's above background
         return scene_num
 
     def clear_and_reset(self):
         """清除当前场景所有对象并重置相机"""
-        valid_mobjects = [m for m in self.mobjects if m is not None]
-        all_mobjects = Group(*valid_mobjects)
+        # Clear updaters explicitly from all mobjects
         for mob in self.mobjects:
             if mob is not None:
                 mob.clear_updaters()
+
+        # Use Group for potentially mixed object types
+        valid_mobjects = [m for m in self.mobjects if m is not None]
+        all_mobjects = Group(*valid_mobjects)
+
         if all_mobjects:
+            # Fade out existing objects
             self.play(FadeOut(all_mobjects, shift=DOWN * 0.5), run_time=0.5)
+
+        # Clear the scene's mobject list
         self.clear()
+
+        # Reset camera position and scale
         self.camera.frame.move_to(ORIGIN)
+        # Ensure frame dimensions match configuration
         self.camera.frame.set(width=config.frame_width, height=config.frame_height)
+        # Reset camera orientation (important if rotations were applied)
+        # For MovingCameraScene, resetting scale and position is usually enough.
+        # If explicit rotation was done: self.camera.frame.set(rotation=0) - check API if needed
+
+        # Reset the custom time tracker
         self.scene_time_tracker.set_value(0)
-        # self.wait(0.5)
+        self.wait(0.1)  # Short pause after reset
 
     def star_updater(self, star, dt):
-        """更新星星透明度，实现闪烁效果"""
+        """更新星星透明度，实现闪烁效果 (Uses scene_time_tracker)"""
+        # Retrieve stored parameters or use defaults
         base_opacity = getattr(star, "base_opacity", 0.5)
         frequency = getattr(star, "frequency", 0.5)
         phase = getattr(star, "phase", 0)
+
         current_time = self.scene_time_tracker.get_value()
+        # Calculate opacity based on sine wave
         opacity_variation = 0.4 * np.sin(2 * PI * frequency * current_time + phase)
-        target_opacity = np.clip(base_opacity + opacity_variation, 0.1, 0.9)
+        target_opacity = np.clip(base_opacity + opacity_variation, 0.1, 0.9)  # Clamp opacity
+
+        # Apply the calculated opacity
+        # Use set_opacity which handles both fill and stroke
         star.set_opacity(target_opacity)
 
-    def play_scene_01(self):
-        self.scene_time_tracker.set_value(0)
+        # Manually update the scene time tracker
+        self.scene_time_tracker.increment_value(dt)
 
-        # 背景和星空
+    # --- Scene 1: Welcome & Starry Background ---
+    def play_scene_01(self):
+        """场景一：欢迎介绍与星空背景"""
+        self.scene_time_tracker.set_value(0)  # Reset time for this scene
+
+        # Background
         bg1 = Rectangle(
             width=config.frame_width,
             height=config.frame_height,
@@ -879,92 +1221,568 @@ class CombinedScene(MovingCameraScene):
         bg1.set_z_index(-10)
         self.add(bg1)
 
+        # Stars
         stars = VGroup()
         num_stars = 200
         for _ in range(num_stars):
-            x_pos = np.random.uniform(-config.frame_width / 2, config.frame_width / 2)
-            y_pos = np.random.uniform(-config.frame_height / 2, config.frame_height / 2)
+            x_pos = np.random.uniform(-config.frame_width / 2 * 0.95, config.frame_width / 2 * 0.95)
+            y_pos = np.random.uniform(-config.frame_height / 2 * 0.95, config.frame_height / 2 * 0.95)
             star_dot = Dot(point=[x_pos, y_pos, 0], radius=0.02, color=MY_WHITE)
+            # Store custom data directly on the mobject
             star_dot.base_opacity = np.random.uniform(0.3, 0.7)
             star_dot.frequency = np.random.uniform(0.3, 0.8)
             star_dot.phase = np.random.uniform(0, 2 * PI)
+            # Set initial opacity using the method, not constructor
             star_dot.set_opacity(star_dot.base_opacity)
             stars.add(star_dot)
+
+        # Add the updater to the stars group
         stars.add_updater(self.star_updater)
         self.add(stars)
 
+        # Scene Number
         scene_num_01 = self.get_scene_number("01")
-        scene_num_01.set_z_index(10)
         self.add(scene_num_01)
 
+        # Title and Subtitle
         title = Text("大家好，欢迎来到本期数学讲解视频 👋", font_size=48, color=MY_WHITE)
-        title.shift(UP * 2.5)
+        title.move_to(UP * 2.5)  # Position using move_to or shift
+
         subtitle_part1 = Text("如何求解函数", font_size=36, color=MY_WHITE)
         subtitle_part2 = MathTex("f(x)=x^2", font_size=42, color=MY_ORANGE)
         subtitle_part3 = Text("的切线方程 🤔", font_size=36, color=MY_WHITE)
         subtitle = VGroup(subtitle_part1, subtitle_part2, subtitle_part3).arrange(RIGHT, buff=0.2)
         subtitle.next_to(title, DOWN, buff=0.5)
 
-        # 提前加载旁白音频，获得音频时长
-        voice_text = "大家好，欢迎来到本期数学讲解视频。本期我们将讲解如何求解函数 f(x) 等于 x 平方的切线方程。"
-        with custom_voiceover_tts(voice_text) as tracker:
-            # 立即开始播放声音
-            self.add_sound(tracker.audio_path, time_offset=0)
+        # --- TTS Integration ---
+        voice_text_01 = "大家好，欢迎来到本期数学讲解视频。👋 本期我们将讲解如何求解函数 f(x) 等于 x 平方的切线方程。🤔"
+        with custom_voiceover_tts(voice_text_01) as tracker:
+            # Check if audio is available
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 1 TTS audio failed or has zero duration.")
+                # If TTS fails, we'll just run the animations without sound sync
 
-            # 同时显示屏幕底部的完整字幕，与音频完全同步显示
+            # Subtitle for the voiceover
             subtitle_voice = Text(
-                voice_text,
+                voice_text_01,
                 font_size=32,
                 color=MY_WHITE,
-                width=config.frame_width - 2,  # 使用width实现自动换行
-                should_center=True,  # 字幕居中
-            )
-            subtitle_voice.to_edge(DOWN, buff=0.5)
+                # Use width for automatic line breaking
+                width=config.frame_width - 2,
+                should_center=True  # Center multi-line text
+            ).to_edge(DOWN, buff=0.5)
 
-            # 同时开始：声音播放 + 底部字幕 + 动画
+            # Animation sequence synchronized with TTS (if available)
+            anim_runtime_title = 1.5
+            anim_runtime_subtitle = 2.0
+            fade_out_duration = 1.0
+            total_anim_duration_planned = anim_runtime_title + anim_runtime_subtitle
+
+            # Animation Group 1: Title + Subtitle Voice Fade In
             self.play(
                 AnimationGroup(
-                    FadeIn(subtitle_voice, run_time=0.5),  # 字幕快速淡入
-                    FadeIn(title, shift=UP * 0.5, run_time=1.5),  # 标题动画
-                    lag_ratio=0.0  # 同步进行，不延迟
+                    FadeIn(subtitle_voice, run_time=0.5),  # Quick fade in for subtitle
+                    FadeIn(title, shift=UP * 0.5, run_time=anim_runtime_title),
+                    lag_ratio=0.0  # Start simultaneously
                 ),
-                run_time=1.5  # 动画总体控制在1.5秒以内
+                run_time=anim_runtime_title  # Overall duration for this group
             )
 
-            # 开始副标题的动画 (在声音继续播放时)
+            # Animation Group 2: Subtitle parts appear
             self.play(
                 AnimationGroup(
                     FadeIn(subtitle_part1, shift=RIGHT * 0.2),
-                    Write(subtitle_part2),
+                    Write(subtitle_part2),  # MathTex uses Write
                     FadeIn(subtitle_part3, shift=LEFT * 0.2),
-                    lag_ratio=0.2  # 微小延迟让动画更加流畅
+                    lag_ratio=0.2  # Slight delay between parts
+                ),
+                run_time=anim_runtime_subtitle
+            )
+
+            # Calculate wait time based on audio duration vs animation time
+            if tracker.duration > 0:
+                # Time already spent in animations
+                elapsed_time = total_anim_duration_planned
+                # Time needed for fade out at the end
+                time_for_fadeout = fade_out_duration
+                # Calculate remaining time to wait
+                remaining_time = tracker.duration - elapsed_time - time_for_fadeout
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                # If no audio, just wait a bit after animations
+                self.wait(1.0)
+
+            # Fade out the voiceover subtitle
+            self.play(FadeOut(subtitle_voice), run_time=fade_out_duration)
+
+        # Keep stars and title/subtitle visible for a moment before clearing
+        self.wait(1)
+
+    # --- Scene 2: Tangent Concept & Problem Background ---
+    def play_scene_02(self):
+        """场景二：切线概念与问题背景介绍"""
+        self.scene_time_tracker.set_value(0)  # Reset time
+
+        # Background
+        bg2 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg2)
+
+        # Scene Number
+        scene_num_02 = self.get_scene_number("02")
+        self.add(scene_num_02)
+
+        # Layout: Left Text, Right Graph
+        left_margin = LEFT * (config.frame_width / 4)
+        right_margin = RIGHT * (config.frame_width / 4)
+
+        # Left Text explanation
+        text_lines = VGroup(
+            Text("切线概念：", font_size=36, color=MY_BLACK, weight=BOLD),
+            Text("切线是曲线在某一点的瞬时方向。", font_size=30, color=MY_BLACK),
+            # Combine Text and MathTex for inline formula
+            VGroup(
+                Text("对于函数 ", font_size=30, color=MY_BLACK),
+                MathTex("f(x)=x^2", font_size=36, color=MY_ORANGE),
+                Text("，", font_size=30, color=MY_BLACK),
+            ).arrange(RIGHT, buff=0.15),
+            Text("切线反映了曲线在该点的斜率变化。", font_size=30, color=MY_BLACK),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+        text_lines.move_to(left_margin + UP * 1.0)  # Position on the left
+
+        # Right Graph
+        axes = Axes(
+            x_range=[-3, 3, 1],
+            y_range=[0, 9, 1],
+            x_length=6,
+            y_length=5,
+            # IMPORTANT: Hide central axes to avoid "cross"
+            x_axis_config={"stroke_width": 2, "color": MY_BLACK, "include_tip": True},
+            y_axis_config={"stroke_width": 2, "color": MY_BLACK, "include_tip": True},
+            axis_config={"color": MY_BLACK, "stroke_width": 2},
+            tips=False,  # Hide tips if specified in axis_config
+        ).move_to(right_margin + DOWN * 0.5)  # Position on the right
+
+        # Hide the zero lines of the axes themselves if they overlay grid lines
+        # This is usually done by setting stroke_width to 0 in axis_config,
+        # but we want visible axes, just not the implicit lines at x=0, y=0 if they look odd.
+        # If using NumberPlane, you'd hide center lines there. For Axes, usually ok.
+
+        # Function and Plot
+        func = lambda x: x ** 2
+        parabola = axes.plot(func, color=MY_ORANGE, stroke_width=3)
+        parabola_label = axes.get_graph_label(parabola, label='f(x)=x^2', x_val=2, direction=UR)
+        # Set font size after creation for graph labels
+        parabola_label.set_color(MY_ORANGE)
+        parabola_label.set_font_size(30)
+
+        # Tangent Point
+        a = 1
+        tangent_point_coord = axes.c2p(a, func(a))  # Convert graph coords to screen coords
+        tangent_point_dot = Dot(tangent_point_coord, color=MY_RED, radius=0.1)
+        tangent_point_label = MathTex("(a, a^2)", font_size=30, color=MY_RED)
+        tangent_point_label.next_to(tangent_point_dot, DR, buff=0.1)
+
+        # Pulsing animation for the dot (simple scale pulse)
+        # We'll use an animation loop instead of an updater here for simplicity
+        dot_pulse_anim = Succession(
+            ApplyMethod(tangent_point_dot.scale, 1.3, rate_func=there_and_back, run_time=1.0),
+            Wait(0.5)
+        )
+
+        # --- TTS Integration ---
+        voice_text_02 = "首先我们来理解切线的概念。切线就是曲线在某一点的瞬时方向。对于我们研究的函数 f(x) 等于 x 平方，它的图像是一条抛物线。我们关注的是如何找到这条抛物线上任意一点，比如点 (a, a平方) 处的切线。"
+        with custom_voiceover_tts(voice_text_02) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 2 TTS audio failed or has zero duration.")
+
+            subtitle_voice_02 = Text(
+                voice_text_02, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            # Staggered animation appearance
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice_02, run_time=0.5),
+                    # Create Axes and Parabola first
+                    Create(axes, run_time=2.0),
+                    Create(parabola, run_time=2.0),
+                    lag_ratio=0.0  # Start subtitle and graph creation together
                 ),
                 run_time=2.0
             )
+            # Then fade in text and labels
+            self.play(
+                AnimationGroup(
+                    FadeIn(text_lines, shift=UP * 0.5, lag_ratio=0.1),  # Fade in text lines
+                    Write(parabola_label),  # Write graph label
+                    lag_ratio=0.3  # Slight lag between text and label
+                ),
+                run_time=2.5
+            )
+            # Finally, show the tangent point
+            self.play(
+                GrowFromCenter(tangent_point_dot),
+                Write(tangent_point_label),
+                run_time=1.0
+            )
 
-            # 上述动画累计1.5 + 2.0 = 3.5秒，此时若声音没播放完，继续等待声音完成
-            elapsed_time = 3.5
-            remaining_time = tracker.duration - elapsed_time - 1.0  # 减去后续字幕淡出时间
-            if remaining_time > 0:
-                self.wait(remaining_time)
+            # Play the dot pulse animation while text/graph is shown
+            self.play(dot_pulse_anim)  # Run the pulsing animation once
 
-            # 最后字幕淡出
-            self.play(FadeOut(subtitle_voice), run_time=1.0)
+            # Calculate wait time
+            elapsed_time = 2.0 + 2.5 + 1.0 + dot_pulse_anim.get_run_time()
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - elapsed_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            # Fade out subtitle
+            self.play(FadeOut(subtitle_voice_02), run_time=1.0)
 
         self.wait(1)
+
+    # --- Scene 3: Solving Steps ---
+    def play_scene_03(self):
+        """场景三：切线求解步骤展示"""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Light gray, maybe with faint grid)
+        bg3 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg3)
+
+        # Optional faint grid using NumberPlane
+        grid = NumberPlane(
+            x_range=[-10, 10, 1], y_range=[-6, 6, 1],
+            x_length=config.frame_width, y_length=config.frame_height,
+            background_line_style={
+                "stroke_color": MY_MEDIUM_GRAY,
+                "stroke_width": 1,
+                "stroke_opacity": 0.3  # Faint grid lines
+            },
+            # Hide axis labels and thick center lines of the grid itself
+            axis_config={"stroke_width": 0},
+            x_axis_config={"stroke_width": 0},
+            y_axis_config={"stroke_width": 0},
+        ).set_z_index(-9)  # Behind content but above background
+        self.add(grid)
+
+        # Scene Number
+        scene_num_03 = self.get_scene_number("03")
+        self.add(scene_num_03)
+
+        # Layout: Left Steps, Right Graph
+        left_margin = LEFT * (config.frame_width / 4)
+        right_margin = RIGHT * (config.frame_width / 4)
+
+        # Left: Step-by-step derivation
+        steps_title = Text("求解步骤:", font_size=36, color=MY_BLACK, weight=BOLD).to_corner(UL, buff=1.0).shift(
+            right_margin * 0.1)  # Adjust position
+
+        # Combine Text (Chinese) and MathTex (Formula) for each step
+        step1 = VGroup(Text("1. 确定切点: ", font_size=30, color=MY_BLACK),
+                       MathTex("(a, a^2)", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step2 = VGroup(Text("2. 求导数和斜率: ", font_size=30, color=MY_BLACK),
+                       MathTex("f'(x)=2x, \\quad f'(a)=2a", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step3 = VGroup(Text("3. 写出点斜式: ", font_size=30, color=MY_BLACK),
+                       MathTex("y - a^2 = 2a(x - a)", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step4 = VGroup(Text("4. 整理得切线方程: ", font_size=30, color=MY_BLACK),
+                       MathTex("y = 2a(x - a) + a^2", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+
+        steps_vg = VGroup(step1, step2, step3, step4).arrange(DOWN, aligned_edge=LEFT, buff=0.4)
+        steps_vg.next_to(steps_title, DOWN, aligned_edge=LEFT, buff=0.5)
+        steps_vg.move_to(left_margin + UP * 0.5)  # Adjust vertical position
+
+        # Right: Graph Visualization
+        axes_step3 = Axes(
+            x_range=[-3, 3, 1], y_range=[0, 9, 1],
+            x_length=6, y_length=5,
+            x_axis_config={"stroke_width": 2, "color": MY_BLACK},
+            y_axis_config={"stroke_width": 2, "color": MY_BLACK},
+            axis_config={"color": MY_BLACK, "include_tip": False},
+            tips=False,
+        ).move_to(right_margin + DOWN * 0.5)
+
+        func = lambda x: x ** 2
+        parabola_step3 = axes_step3.plot(func, color=MY_ORANGE, stroke_width=3)
+
+        a = 1  # Specific value for visualization
+        slope = 2 * a
+        tangent_point_coord_step3 = axes_step3.c2p(a, func(a))
+        tangent_point_dot_step3 = Dot(tangent_point_coord_step3, color=MY_RED, radius=0.08)  # Slightly smaller dot
+
+        # Tangent Line Calculation (using plot for simplicity)
+        tangent_line_func = lambda x: slope * (x - a) + func(a)
+        tangent_line = axes_step3.plot(
+            tangent_line_func,
+            color=MY_GOLD,  # Use Gold for tangent line
+            stroke_width=3,
+            x_range=[a - 1.5, a + 1.5]  # Limit line length for clarity
+        )
+        tangent_label = axes_step3.get_graph_label(tangent_line, label='y = 2a(x-a)+a^2', direction=DOWN)
+        tangent_label.set_color(MY_GOLD)
+        tangent_label.set_font_size(24)  # Smaller font for line label
+
+        # --- TTS Integration ---
+        voice_text_03 = "现在我们来一步步求解。第一步，确定切点，就是抛物线上的点 (a, a平方)。第二步，计算函数 f(x) 的导数，得到 f'(x) 等于 2x。那么在点 a 处的斜率就是 f'(a) 等于 2a。第三步，利用点斜式方程，我们可以写出切线的初步形式：y 减 a平方 等于 2a 乘以 (x 减 a)。最后，第四步，整理这个方程，就得到了最终的切线方程：y 等于 2a 乘以 (x 减 a) 再加上 a平方。看右边的图形，当 a=1 时，切点是 (1,1)，斜率是 2，这就是对应的切线。"
+        with custom_voiceover_tts(voice_text_03) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 3 TTS audio failed or has zero duration.")
+
+            subtitle_voice_03 = Text(
+                voice_text_03, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            # Show subtitle and initial elements
+            self.play(FadeIn(subtitle_voice_03, run_time=0.5))
+            self.play(
+                FadeIn(steps_title),
+                Create(axes_step3),
+                Create(parabola_step3),
+                GrowFromCenter(tangent_point_dot_step3),
+                run_time=2.0
+            )
+
+            # Animate steps appearing one by one, synchronized with rough timing
+            self.play(FadeIn(step1[0]), Write(step1[1]), run_time=1.5)  # Step 1
+            self.wait(1.0)  # Pause slightly between steps
+            self.play(FadeIn(step2[0]), Write(step2[1]), run_time=2.0)  # Step 2
+            self.wait(1.0)
+            self.play(FadeIn(step3[0]), Write(step3[1]), run_time=2.5)  # Step 3
+            # Show tangent line when step 3/4 appears
+            self.play(Create(tangent_line), Write(tangent_label), run_time=2.0)
+            self.wait(0.5)
+            self.play(FadeIn(step4[0]), Write(step4[1]), run_time=2.5)  # Step 4
+
+            # Adjust wait time based on audio duration
+            anim_time = 2.0 + 1.5 + 1.0 + 2.0 + 1.0 + 2.5 + 2.0 + 0.5 + 2.5  # Approximate animation time
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_03), run_time=1.0)
+
+        self.wait(1)
+
+    # --- Scene 4: Theoretical Principles ---
+    def play_scene_04(self):
+        """场景四：理论原理与数学公式解析"""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Medium Gray)
+        bg4 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_MEDIUM_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg4)
+
+        # Scene Number
+        scene_num_04 = self.get_scene_number("04")
+        self.add(scene_num_04)
+
+        # Camera intro rotation (optional)
+        # self.play(self.camera.frame.animate.rotate(10 * DEGREES, axis=OUT), run_time=1.0)
+        # self.play(self.camera.frame.animate.move_to(ORIGIN).rotate(-10 * DEGREES, axis=OUT), run_time=1.0) # Rotate back and center
+
+        # Top: Derivative Definition Formula
+        deriv_title = Text("核心原理 1: 导数定义", font_size=32, color=MY_BLACK, weight=BOLD)
+        deriv_formula = MathTex(
+            r"f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}",
+            font_size=48, color=MY_DARK_BLUE
+        )
+        deriv_group = VGroup(deriv_title, deriv_formula).arrange(DOWN, buff=0.3)
+        deriv_group.move_to(UP * 2.0)  # Position top-center
+
+        # Bottom: Point-Slope Form Formula
+        point_slope_title = Text("核心原理 2: 点斜式方程", font_size=32, color=MY_BLACK, weight=BOLD)
+        point_slope_formula = MathTex(
+            r"y - y_1 = m(x - x_1)",
+            font_size=48, color=MY_DARK_BLUE
+        )
+        point_slope_group = VGroup(point_slope_title, point_slope_formula).arrange(DOWN, buff=0.3)
+        point_slope_group.move_to(DOWN * 2.0)  # Position bottom-center
+
+        # Arrow connecting the concepts
+        # Use Create for arrow animation
+        arrow = Arrow(
+            deriv_formula.get_bottom() + DOWN * 0.2,  # Start below deriv formula
+            point_slope_group.get_top() + UP * 0.2,  # End above point-slope group
+            buff=0.1,
+            color=MY_GOLD,
+            stroke_width=6,
+            max_tip_length_to_length_ratio=0.15,  # Adjust arrow tip size
+        )
+
+        # --- TTS Integration ---
+        voice_text_04 = "回顾一下背后的数学原理。我们计算斜率 2a，是基于导数的定义，它描述了函数在某点变化的快慢。而我们写出最终的切线方程，是利用了直线的点斜式方程，其中 (x1, y1) 就是我们的切点 (a, a平方)，m 就是我们求出的斜率 2a。这两个是求解切线问题的关键理论基础。"
+        with custom_voiceover_tts(voice_text_04) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 4 TTS audio failed or has zero duration.")
+
+            subtitle_voice_04 = Text(
+                voice_text_04, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(FadeIn(subtitle_voice_04, run_time=0.5))
+
+            # Animate formulas and arrow
+            self.play(
+                FadeIn(deriv_group, shift=UP * 0.5),
+                run_time=2.0
+            )
+            self.wait(1.0)  # Pause before showing the next part
+            self.play(
+                FadeIn(point_slope_group, shift=DOWN * 0.5),
+                run_time=2.0
+            )
+            self.wait(0.5)
+            # Use Create for the arrow
+            self.play(Create(arrow), run_time=1.5)
+
+            # Highlight key parts (optional)
+            # self.play(Indicate(deriv_formula.get_part_by_tex("f'(x)")), color=MY_RED)
+            # self.play(Indicate(point_slope_formula.get_part_by_tex("m")), color=MY_RED)
+
+            # Calculate wait time
+            anim_time = 0.5 + 2.0 + 1.0 + 2.0 + 0.5 + 1.5  # Animation time
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_04), run_time=1.0)
+
+        self.wait(1)
+
+    # --- Scene 5: Summary & Review ---
+    def play_scene_05(self):
+        """场景五：总结与回顾"""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Dark Blue or Black)
+        bg5 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_BLACK, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg5)
+
+        # Scene Number
+        scene_num_05 = self.get_scene_number("05")
+        self.add(scene_num_05)
+
+        # Summary Title
+        summary_title = Text("总结 ✨", font_size=48, color=MY_GOLD, weight=BOLD)
+        summary_title.to_edge(UP, buff=1.0)
+
+        # Key formulas
+        point_formula = MathTex("(a, a^2)", font_size=40, color=MY_WHITE)
+        point_label = Text("切点: ", font_size=36, color=MY_WHITE)
+        point_group = VGroup(point_label, point_formula).arrange(RIGHT, buff=0.2)
+
+        deriv_result = MathTex("f'(x)=2x, \\quad f'(a)=2a", font_size=40, color=MY_WHITE)
+        deriv_label = Text("导数与斜率: ", font_size=36, color=MY_WHITE)
+        deriv_group = VGroup(deriv_label, deriv_result).arrange(RIGHT, buff=0.2)
+
+        tangent_eq = MathTex("y = 2a(x - a) + a^2", font_size=40, color=MY_WHITE)
+        tangent_label = Text("切线方程: ", font_size=36, color=MY_WHITE)
+        tangent_group = VGroup(tangent_label, tangent_eq).arrange(RIGHT, buff=0.2)
+
+        # Arrange summary items vertically
+        summary_formulas = VGroup(point_group, deriv_group, tangent_group).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
+        summary_formulas.next_to(summary_title, DOWN, buff=0.8)
+
+        # Question at the bottom
+        question = Text("思考 🤔：你认为切线方程还能帮助我们解决哪些类型的问题？", font_size=32, color=MY_LIGHT_GRAY)
+        question.to_edge(DOWN, buff=1.0)
+
+        # --- TTS Integration ---
+        voice_text_05 = "好了，让我们来总结一下。要求函数 f(x) 等于 x 平方的切线方程，你需要记住三个关键点：一是切点坐标 (a, a平方)，二是导数 f'(x) 等于 2x，由此得到切点斜率 2a，三是最终的切线方程 y 等于 2a 乘以 (x 减 a) 加上 a平方。希望通过本期视频，你已经掌握了这个方法！思考一下，切线方程在数学或其他领域还有哪些应用呢？"
+        with custom_voiceover_tts(voice_text_05) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 5 TTS audio failed or has zero duration.")
+
+            subtitle_voice_05 = Text(
+                voice_text_05, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)  # Place above the final question maybe?
+            # Let's place the fixed question first, then the voice subtitle above it
+            subtitle_voice_05.next_to(question, UP, buff=0.3)
+
+            # Animations
+            self.play(FadeIn(summary_title), run_time=1.0)
+            self.play(FadeIn(subtitle_voice_05, run_time=0.5))  # Show subtitle early
+
+            # Reveal formulas one by one
+            self.play(FadeIn(point_group, shift=LEFT * 0.2), run_time=1.5)
+            self.wait(0.5)
+            self.play(FadeIn(deriv_group, shift=LEFT * 0.2), run_time=1.5)
+            self.wait(0.5)
+            self.play(FadeIn(tangent_group, shift=LEFT * 0.2), run_time=1.5)
+            self.wait(1.0)  # Pause on formulas
+
+            # Show the final question
+            self.play(FadeIn(question, shift=UP * 0.2), run_time=1.5)
+
+            # Camera Zoom In
+            self.play(self.camera.frame.animate.scale(1.1), run_time=1.5)  # Slight zoom for focus
+
+            # Calculate wait time
+            anim_time = 1.0 + 0.5 + 1.5 + 0.5 + 1.5 + 0.5 + 1.5 + 1.0 + 1.5 + 1.5  # Animation time
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_05), run_time=1.0)
+
+        self.wait(2)  # Hold the final summary screen
 
 
 # --- Main execution block ---
 if __name__ == "__main__":
-    config.pixel_height = 1080
-    config.pixel_width = 1920
-    config.frame_rate = 30
-    config.output_file = "CombinedScene"
-    config.media_dir = "06"
-    config.disable_caching = True
+    # Basic configuration
+    config.pixel_height = 1080  # Set resolution height
+    config.pixel_width = 1920  # Set resolution width
+    config.frame_rate = 30  # Set frame rate
+    config.output_file = "CombinedScene"  # Specify output filename
+    config.disable_caching = True  # Disable caching
+
+    # Set output directory using placeholder for Java replacement
+    config.media_dir = r"#(output_path)"  # IMPORTANT: Use the placeholder
+
+    # Create and render the scene
     scene = CombinedScene()
     scene.render()
-    print("Scene rendering finished.")
+
+    print(f"Scene rendering finished. Output in: {config.media_dir}")
 ```
 
 我的版本是 Manim Community v0.19.0.请输出完整的 Python 代码。

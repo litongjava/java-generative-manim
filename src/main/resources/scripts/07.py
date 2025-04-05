@@ -759,7 +759,6 @@ if __name__ == "__main__":
     config.frame_rate = 30  # Set frame rate
     config.output_file = "CombinedScene"  # Specify output filename
     config.disable_caching = True  # Disable caching
-    #config.renderer="opengl"
 
     # Set output directory using placeholder for Java replacement
     config.media_dir = "07"  # IMPORTANT: Use the placeholder
