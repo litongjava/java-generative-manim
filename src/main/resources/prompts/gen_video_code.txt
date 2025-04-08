@@ -1011,6 +1011,110 @@ def clear_and_reset(self):
 **5. 目标:**
 确保生成的代码在 `ThreeDScene` 或其子类中，始终通过 `self.camera.fixed_in_frame_mobjects` 来访问和操作固定在屏幕上的 Mobject 列表，从而避免因尝试访问不存在的 `self.fixed_in_frame_mobjects` 属性而导致的 `AttributeError`。
 
+### 【Manim Code Generation Rule: Avoid Using `contrasting_color` Due to Import Instability】
+
+**1. Problem Description:**
+Attempting to import and use the `contrasting_color` function (e.g., `from manim.utils.color import contrasting_color` or `from manim.utils.color.color import contrasting_color`) frequently leads to `ImportError` or `NameError: name 'contrasting_color' is not defined` / `Unresolved reference 'contrasting_color'` errors.
+
+**2. Reason:**
+The exact location and availability of the `contrasting_color` utility function can be inconsistent across different Manim Community versions or environments. Relying on it makes the generated code fragile and prone to breaking.
+
+**3. Correct Practice (Must Follow):**
+*   **Prohibit Import/Usage:** **Absolutely forbid** importing or calling the `contrasting_color` function.
+*   **Use Fixed Contrasting Colors:** When a stroke color needs to contrast with a potentially variable fill color (like in the `create_grid` helper function), **must** use a predefined, fixed, generally contrasting color constant. Good choices are `BLACK` or `WHITE`. Select the one that provides better average contrast against the expected range of fill colors.
+    *   Example: If fill colors are mostly medium-to-light (like `BLUE`, `RED`, `GREEN`), use `BLACK` for the stroke.
+    *   Example: If fill colors are mostly dark, use `WHITE` for the stroke.
+
+**4. Code Example (Correct Practice in `create_grid`):**
+
+```python
+# --- Custom Colors (Ensure BLACK is defined) ---
+MY_BLACK = "#000000"
+# ... other colors ...
+
+# --- Helper Function for Creating Grids ---
+def create_grid(rows, cols, square_size=0.4, spacing=0.05, color=BLUE):
+    """Creates a VGroup representing a grid of squares."""
+    grid = VGroup()
+    # ... (calculate positions) ...
+
+    for r in range(rows):
+        for c in range(cols):
+            # Correct: Use a fixed contrasting color like MY_BLACK for the stroke
+            stroke_col = MY_BLACK
+            square = Square(
+                side_length=square_size,
+                color=color,           # Fill color
+                fill_color=color,      # Fill color
+                fill_opacity=0.7,
+                stroke_width=1,
+                stroke_color=stroke_col # Use the fixed stroke color
+            )
+            # ... (move square) ...
+            grid.add(square)
+    return grid
+
+# --- Incorrect Usage (To Avoid) ---
+# def create_grid_incorrect(...):
+#     ...
+#     # Incorrect: Attempting to use contrasting_color
+#     # from manim.utils.color import contrasting_color # <--- Problematic Import
+#     # stroke_col = contrasting_color(color) # <--- Problematic Usage
+#     # square = Square(..., stroke_color=stroke_col)
+#     ...
+```
+
+**5. Goal:**
+Ensure the generated Manim code is robust and avoids runtime errors (`ImportError`, `NameError`) by eliminating the dependency on the unstable `contrasting_color` function and using reliable, fixed color constants for strokes instead.
+
+---
+
+### 【Manim Code Generation Rule: Correct Usage of `Brace.get_tex()` Styling】
+
+**1. Problem Description:**
+Attempting to pass styling keyword arguments (like `font_size`, `color`, etc.) directly to the `Brace.get_tex("...", font_size=..., color=...)` method triggers a `TypeError: Mobject.next_to() got an unexpected keyword argument '...'` error.
+
+**2. Reason:**
+The `Brace.get_tex()` method internally creates a `MathTex` (or `Tex`) object and then positions it relative to the brace's tip using the `Mobject.next_to()` method (via `put_at_tip`). The styling keyword arguments intended for the `MathTex` object are incorrectly passed down to the internal `next_to()` call, which does not accept them, causing the `TypeError`.
+
+**3. Correct Practice (Must Follow):**
+*   **Separate Creation and Styling:** You **must** separate the creation/positioning of the brace label from its styling.
+    *   **Step 1:** Call `brace.get_tex("Your TeX String")` with **only** the TeX string argument. This creates the `MathTex` object and positions it correctly. Capture the returned `MathTex` object in a variable.
+    *   **Step 2:** Apply styling methods like `.set_font_size(...)`, `.set_color(...)`, etc., directly to the **returned `MathTex` object** *after* it has been created and positioned by `get_tex()`.
+
+**4. Code Example (Correct Practice):**
+
+```python
+from manim import Brace, MathTex, DOWN, Write # Necessary imports
+
+# Assume 'my_mobject' is defined and we want a brace below it
+my_mobject = Circle()
+brace = Brace(my_mobject, direction=DOWN, color=WHITE)
+
+# Correct Usage:
+# 1. Create and position the label using get_tex with only the string
+brace_label = brace.get_tex("Label Text")
+# 2. Style the returned MathTex object afterwards
+brace_label.set_font_size(24)
+brace_label.set_color(YELLOW)
+
+# Example Animation:
+# self.play(GrowFromCenter(brace))
+# self.play(Write(brace_label)) # Animate the styled label
+```
+
+**5. Code Example (Incorrect Practice - Causes Error):**
+
+```python
+# Incorrect Usage (Causes TypeError):
+# Passing font_size directly to get_tex
+# brace_label_incorrect = brace.get_tex("Label Text", font_size=24, color=YELLOW)
+# self.play(Write(brace_label_incorrect))
+```
+
+**6. Goal:**
+Ensure the generated Manim code avoids `TypeError` when creating brace labels by correctly separating the label creation/positioning (using `brace.get_tex("string")`) from the subsequent styling (using `.set_font_size()`, `.set_color()` on the returned object).
+
 ## 完整的python代码示例
 ```
 # -*- coding: utf-8 -*-

@@ -1403,6 +1403,52 @@ Ensure the generated Manim code is robust and avoids runtime errors (`ImportErro
 
 ---
 
+### 【Manim Code Generation Rule: Correct Usage of `Brace.get_tex()` Styling】
+
+**1. Problem Description:**
+Attempting to pass styling keyword arguments (like `font_size`, `color`, etc.) directly to the `Brace.get_tex("...", font_size=..., color=...)` method triggers a `TypeError: Mobject.next_to() got an unexpected keyword argument '...'` error.
+
+**2. Reason:**
+The `Brace.get_tex()` method internally creates a `MathTex` (or `Tex`) object and then positions it relative to the brace's tip using the `Mobject.next_to()` method (via `put_at_tip`). The styling keyword arguments intended for the `MathTex` object are incorrectly passed down to the internal `next_to()` call, which does not accept them, causing the `TypeError`.
+
+**3. Correct Practice (Must Follow):**
+*   **Separate Creation and Styling:** You **must** separate the creation/positioning of the brace label from its styling.
+    *   **Step 1:** Call `brace.get_tex("Your TeX String")` with **only** the TeX string argument. This creates the `MathTex` object and positions it correctly. Capture the returned `MathTex` object in a variable.
+    *   **Step 2:** Apply styling methods like `.set_font_size(...)`, `.set_color(...)`, etc., directly to the **returned `MathTex` object** *after* it has been created and positioned by `get_tex()`.
+
+**4. Code Example (Correct Practice):**
+
+```python
+from manim import Brace, MathTex, DOWN, Write # Necessary imports
+
+# Assume 'my_mobject' is defined and we want a brace below it
+my_mobject = Circle()
+brace = Brace(my_mobject, direction=DOWN, color=WHITE)
+
+# Correct Usage:
+# 1. Create and position the label using get_tex with only the string
+brace_label = brace.get_tex("Label Text")
+# 2. Style the returned MathTex object afterwards
+brace_label.set_font_size(24)
+brace_label.set_color(YELLOW)
+
+# Example Animation:
+# self.play(GrowFromCenter(brace))
+# self.play(Write(brace_label)) # Animate the styled label
+```
+
+**5. Code Example (Incorrect Practice - Causes Error):**
+
+```python
+# Incorrect Usage (Causes TypeError):
+# Passing font_size directly to get_tex
+# brace_label_incorrect = brace.get_tex("Label Text", font_size=24, color=YELLOW)
+# self.play(Write(brace_label_incorrect))
+```
+
+**6. Goal:**
+Ensure the generated Manim code avoids `TypeError` when creating brace labels by correctly separating the label creation/positioning (using `brace.get_tex("string")`) from the subsequent styling (using `.set_font_size()`, `.set_color()` on the returned object).
+
 ## complete Python code example
 here is the complete Python code example.
 
