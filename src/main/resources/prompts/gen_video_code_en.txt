@@ -1345,7 +1345,66 @@ class MyThreeDScene(ThreeDScene):
 Ensure the generated code, when operating within a `ThreeDScene` or its subclasses, correctly accesses and manipulates the list of fixed-in-frame Mobjects using `self.camera.fixed_in_frame_mobjects`, thereby avoiding `AttributeError` from attempting to access the non-existent `self.fixed_in_frame_mobjects` attribute.
 
 
-Okay, here is the complete Python code example with all comments and text strings translated into English.
+### 【Manim Code Generation Rule: Avoid Using `contrasting_color` Due to Import Instability】
+
+**1. Problem Description:**
+Attempting to import and use the `contrasting_color` function (e.g., `from manim.utils.color import contrasting_color` or `from manim.utils.color.color import contrasting_color`) frequently leads to `ImportError` or `NameError: name 'contrasting_color' is not defined` / `Unresolved reference 'contrasting_color'` errors.
+
+**2. Reason:**
+The exact location and availability of the `contrasting_color` utility function can be inconsistent across different Manim Community versions or environments. Relying on it makes the generated code fragile and prone to breaking.
+
+**3. Correct Practice (Must Follow):**
+*   **Prohibit Import/Usage:** **Absolutely forbid** importing or calling the `contrasting_color` function.
+*   **Use Fixed Contrasting Colors:** When a stroke color needs to contrast with a potentially variable fill color (like in the `create_grid` helper function), **must** use a predefined, fixed, generally contrasting color constant. Good choices are `BLACK` or `WHITE`. Select the one that provides better average contrast against the expected range of fill colors.
+    *   Example: If fill colors are mostly medium-to-light (like `BLUE`, `RED`, `GREEN`), use `BLACK` for the stroke.
+    *   Example: If fill colors are mostly dark, use `WHITE` for the stroke.
+
+**4. Code Example (Correct Practice in `create_grid`):**
+
+```python
+# --- Custom Colors (Ensure BLACK is defined) ---
+MY_BLACK = "#000000"
+# ... other colors ...
+
+# --- Helper Function for Creating Grids ---
+def create_grid(rows, cols, square_size=0.4, spacing=0.05, color=BLUE):
+    """Creates a VGroup representing a grid of squares."""
+    grid = VGroup()
+    # ... (calculate positions) ...
+
+    for r in range(rows):
+        for c in range(cols):
+            # Correct: Use a fixed contrasting color like MY_BLACK for the stroke
+            stroke_col = MY_BLACK
+            square = Square(
+                side_length=square_size,
+                color=color,           # Fill color
+                fill_color=color,      # Fill color
+                fill_opacity=0.7,
+                stroke_width=1,
+                stroke_color=stroke_col # Use the fixed stroke color
+            )
+            # ... (move square) ...
+            grid.add(square)
+    return grid
+
+# --- Incorrect Usage (To Avoid) ---
+# def create_grid_incorrect(...):
+#     ...
+#     # Incorrect: Attempting to use contrasting_color
+#     # from manim.utils.color import contrasting_color # <--- Problematic Import
+#     # stroke_col = contrasting_color(color) # <--- Problematic Usage
+#     # square = Square(..., stroke_color=stroke_col)
+#     ...
+```
+
+**5. Goal:**
+Ensure the generated Manim code is robust and avoids runtime errors (`ImportError`, `NameError`) by eliminating the dependency on the unstable `contrasting_color` function and using reliable, fixed color constants for strokes instead.
+
+---
+
+## complete Python code example
+here is the complete Python code example.
 
 ```python
 # -*- coding: utf-8 -*-
