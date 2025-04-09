@@ -7,17 +7,6 @@ from manim import *
 import hashlib
 from moviepy import AudioFileClip # Correct import
 
-# --- Font Check (Optional but Recommended) ---
-# import manimpango
-# DEFAULT_FONT = "Noto Sans" # Example
-# available_fonts = manimpango.list_fonts()
-# final_font = None
-# if DEFAULT_FONT in available_fonts:
-#     final_font = DEFAULT_FONT
-# else:
-#     print(f"Warning: Font '{DEFAULT_FONT}' not found. Using Manim default.")
-# # In setup: if final_font: Text.set_default(font=final_font)
-
 # --- Custom Colors ---
 MY_LIGHT_GRAY = "#f0f0f0"
 MY_DARK_GRAY = "#555555"
@@ -33,7 +22,7 @@ MY_CONCLUSION_FG = "#ffffff"
 MY_CONCLUSION_SUB = "#cccccc"
 
 # --- TTS Caching Setup ---
-CACHE_DIR = "tts_cache"
+CACHE_DIR = "#(output_path)/audio"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 class CustomVoiceoverTracker:
@@ -125,11 +114,10 @@ class CombinedScene(MovingCameraScene):
         self.clear_and_reset() # Clear before starting next scene
 
         self.play_scene_02()
-        # Don't clear immediately, Scene 3 builds upon Scene 2 elements conceptually
-        # We will handle element reuse/recreation within Scene 3
+        self.clear_and_reset() # Clear before starting next scene (Needed for Scene 3 layout)
 
         self.play_scene_03()
-        # Don't clear immediately, Scene 4 builds upon Scene 3 elements
+        self.clear_and_reset() # <<--- ADDED: Clear before Scene 4 to prevent overlap
 
         self.play_scene_04()
         self.clear_and_reset() # Clear before conclusion
@@ -140,7 +128,8 @@ class CombinedScene(MovingCameraScene):
     def get_scene_number(self, number_str, color=MY_BLACK):
         """Creates and positions the scene number."""
         scene_num = Text(number_str, font_size=24, color=color) # Allow color change
-        scene_num.to_corner(UR, buff=MED_SMALL_BUFF) # Use standard buffer
+        # Increase buffer to avoid overlap with potential titles near the top edge
+        scene_num.to_corner(UR, buff=MED_LARGE_BUFF) # Use a larger buffer
         scene_num.set_z_index(10)
         return scene_num
 
@@ -188,7 +177,7 @@ class CombinedScene(MovingCameraScene):
         self.add(scene_num_01)
 
         # Title
-        title = Text("The Unit Circle", font_size=48, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF) # Use standard buffer
+        title = Text("The Unit Circle", font_size=48, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
 
         # Coordinate Axes
         axes = Axes(
@@ -199,8 +188,9 @@ class CombinedScene(MovingCameraScene):
             y_axis_config={"numbers_to_include": [-1, 1]},
             tips=False
         )
-        x_label = axes.get_x_axis_label("x", edge=RIGHT, direction=RIGHT, buff=SMALL_BUFF) # Standard buffer
-        y_label = axes.get_y_axis_label("y", edge=UP, direction=UP, buff=SMALL_BUFF) # Standard buffer
+        x_label = axes.get_x_axis_label("x", edge=RIGHT, direction=RIGHT, buff=SMALL_BUFF)
+        # --- MODIFIED Y LABEL POSITION ---
+        y_label = axes.get_y_axis_label("y", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF) # Position left of axis top
         axes_labels = VGroup(x_label, y_label).set_color(MY_DARK_GRAY)
 
         # Unit Circle
@@ -227,7 +217,7 @@ class CombinedScene(MovingCameraScene):
             )
         )
         p_label = always_redraw(
-            lambda: MathTex("P", color=MY_RED, font_size=36).next_to(p_dot.get_center(), UR, buff=SMALL_BUFF) # Standard buffer
+            lambda: MathTex("P", color=MY_RED, font_size=36).next_to(p_dot.get_center(), UR, buff=SMALL_BUFF)
         )
         theta_arc = always_redraw(
             lambda: Arc(
@@ -244,7 +234,7 @@ class CombinedScene(MovingCameraScene):
             )
         )
         radius_label = always_redraw(
-             lambda: MathTex("r=1", color=MY_RED, font_size=30).next_to(radius.get_center(), UR, buff=SMALL_BUFF) # Standard buffer
+             lambda: MathTex("r=1", color=MY_RED, font_size=30).next_to(radius.get_center(), UR, buff=SMALL_BUFF)
         )
 
         # Group elements
@@ -259,7 +249,7 @@ class CombinedScene(MovingCameraScene):
             else:
                 print("Warning: Scene 1 TTS failed.")
 
-            subtitle_voice = Text(voice_text_01, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF) # Standard buffer
+            subtitle_voice = Text(voice_text_01, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             # --- Animation ---
             self.play(FadeIn(title), FadeIn(subtitle_voice), run_time=1.0)
@@ -298,7 +288,8 @@ class CombinedScene(MovingCameraScene):
             tips=False
         )
         x_label = axes.get_x_axis_label("x", edge=RIGHT, direction=RIGHT, buff=SMALL_BUFF).set_color(MY_DARK_GRAY)
-        y_label = axes.get_y_axis_label("y", edge=UP, direction=UP, buff=SMALL_BUFF).set_color(MY_DARK_GRAY)
+        # --- MODIFIED Y LABEL POSITION ---
+        y_label = axes.get_y_axis_label("y", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY) # Position left of axis top
         axes_labels = VGroup(x_label, y_label)
 
         radius_val = 1.0
@@ -330,14 +321,14 @@ class CombinedScene(MovingCameraScene):
             lambda: Dot(axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, radius=0.06)
         )
         cos_label = always_redraw(
-            lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=36).next_to(x_intersect_dot.get_center(), DOWN, buff=MED_SMALL_BUFF) # Increased buffer
+            lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=36).next_to(x_intersect_dot.get_center(), DOWN, buff=MED_SMALL_BUFF)
         )
         coord_label = always_redraw(
-            lambda: MathTex(r"(\cos \theta, \sin \theta)", color=MY_RED, font_size=36).next_to(p_dot.get_center(), RIGHT, buff=MED_SMALL_BUFF) # Increased buffer
+            lambda: MathTex(r"(\cos \theta, \sin \theta)", color=MY_RED, font_size=36).next_to(p_dot.get_center(), RIGHT, buff=MED_SMALL_BUFF)
         )
 
         explanation_text = Text("Cosine (cos θ) is the x-coordinate of point P on the unit circle.",
-                                font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF) # Use standard buffer
+                                font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
 
         self.add(vert_line, x_intersect_dot, cos_label, coord_label) # Add updaters
 
@@ -349,7 +340,7 @@ class CombinedScene(MovingCameraScene):
             else:
                 print("Warning: Scene 2 TTS failed.")
 
-            subtitle_voice = Text(voice_text_02, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF) # Standard buffer
+            subtitle_voice = Text(voice_text_02, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             # --- Animation ---
             self.play(FadeIn(explanation_text), FadeIn(subtitle_voice), run_time=1.0)
@@ -366,7 +357,7 @@ class CombinedScene(MovingCameraScene):
                 self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        self.unit_circle_elements = VGroup(axes, axes_labels, circle, radius, p_dot, p_label, theta_arc, theta_label, vert_line, x_intersect_dot, cos_label, coord_label)
+        # No need to store elements as clear_and_reset is called next
         self.wait(1)
 
     # --- Scene 3: Graphing Cosine vs. Angle ---
@@ -401,10 +392,10 @@ class CombinedScene(MovingCameraScene):
         theta_arc_unit = always_redraw(lambda: Arc(radius=0.3 * screen_radius_unit, start_angle=0, angle=self.theta_tracker.get_value(), color=MY_GREEN, arc_center=axes_unit.c2p(0, 0)))
         vert_line_unit = always_redraw(lambda: DashedLine(p_dot_unit.get_center(), axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, stroke_width=2))
         x_intersect_dot_unit = always_redraw(lambda: Dot(axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, radius=0.05))
-        cos_label_unit = always_redraw(lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=30).next_to(x_intersect_dot_unit.get_center(), DOWN, buff=MED_SMALL_BUFF)) # Increased buffer
+        cos_label_unit = always_redraw(lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=30).next_to(x_intersect_dot_unit.get_center(), DOWN, buff=MED_SMALL_BUFF))
 
         unit_circle_group_small = VGroup(axes_unit, circle_unit, radius_unit, p_dot_unit, theta_arc_unit, vert_line_unit, x_intersect_dot_unit, cos_label_unit)
-        unit_circle_group_small.scale(0.8).to_edge(LEFT, buff=LARGE_BUFF) # Use standard buffer
+        unit_circle_group_small.scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
         self.add(radius_unit, p_dot_unit, theta_arc_unit, vert_line_unit, x_intersect_dot_unit, cos_label_unit) # Add updaters
 
         # --- Right Side: Cosine Graph ---
@@ -413,7 +404,7 @@ class CombinedScene(MovingCameraScene):
             y_range=[-1.2, 1.2, 1],
             x_length=8, y_length=4,
             axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"include_numbers": False}, # Disable default for custom Pi labels
+            x_axis_config={"include_numbers": False},
             y_axis_config={"numbers_to_include": [-1, 0, 1]},
             tips=False
         )
@@ -429,13 +420,13 @@ class CombinedScene(MovingCameraScene):
         }
         for x_val, label_tex in custom_x_values_labels.items():
             label = MathTex(label_tex, font_size=24, color=MY_DARK_GRAY)
-            label.next_to(axes_graph.c2p(x_val, 0), DOWN, buff=MED_SMALL_BUFF) # Increased buffer
+            label.next_to(axes_graph.c2p(x_val, 0), DOWN, buff=MED_SMALL_BUFF)
             x_labels_pi.add(label)
 
-        x_graph_label = axes_graph.get_x_axis_label(r"\theta", edge=DOWN, direction=DOWN, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY) # Standard buffer
-        y_graph_label = axes_graph.get_y_axis_label(r"\cos \theta", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY) # Standard buffer
+        x_graph_label = axes_graph.get_x_axis_label(r"\theta", edge=DOWN, direction=DOWN, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
+        y_graph_label = axes_graph.get_y_axis_label(r"\cos \theta", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
         axes_graph_labels = VGroup(x_graph_label, y_graph_label)
-        graph_group = VGroup(axes_graph, axes_graph_labels, x_labels_pi).to_edge(RIGHT, buff=LARGE_BUFF) # Use standard buffer
+        graph_group = VGroup(axes_graph, axes_graph_labels, x_labels_pi).to_edge(RIGHT, buff=LARGE_BUFF)
 
         cosine_graph = axes_graph.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=3)
 
@@ -453,6 +444,7 @@ class CombinedScene(MovingCameraScene):
             )
         )
 
+        # Group graph elements (add cosine_graph here)
         self.graph_elements.add(graph_group, cosine_graph, moving_dot_graph, connecting_line)
         self.add(moving_dot_graph, connecting_line) # Add updaters
 
@@ -464,7 +456,7 @@ class CombinedScene(MovingCameraScene):
             else:
                 print("Warning: Scene 3 TTS failed.")
 
-            subtitle_voice = Text(voice_text_03, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF) # Standard buffer
+            subtitle_voice = Text(voice_text_03, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             # --- Animation ---
             self.play(FadeIn(subtitle_voice), run_time=0.5)
@@ -486,7 +478,7 @@ class CombinedScene(MovingCameraScene):
                 self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        self.unit_circle_elements = unit_circle_group_small
+        # Don't store elements as clear_and_reset is called next
         self.wait(1)
 
     # --- Scene 4: Highlighting Key Features ---
@@ -501,45 +493,52 @@ class CombinedScene(MovingCameraScene):
         scene_num_04 = self.get_scene_number("04", color=MY_BLACK)
         self.add(scene_num_04)
 
-        # Clean up updaters from previous scene
-        for mob in self.unit_circle_elements:
-             if mob is not None and hasattr(mob, 'clear_updaters') and mob.get_updaters(): mob.clear_updaters()
-        if len(self.graph_elements) >= 4:
-            moving_dot_graph = self.graph_elements.submobjects[2]
-            connecting_line = self.graph_elements.submobjects[3]
-            moving_dot_graph.clear_updaters()
-            connecting_line.clear_updaters()
-            self.remove(moving_dot_graph, connecting_line)
-            self.graph_elements.remove(moving_dot_graph)
-            self.graph_elements.remove(connecting_line)
-        else:
-             print("Warning: Could not clean up all updater elements in Scene 4.")
+        # --- Recreate elements needed for this scene ---
+        # Unit Circle (Left)
+        axes_unit = Axes(
+            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=4, y_length=4,
+            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 2, "include_numbers": True},
+            x_axis_config={"numbers_to_include": [-1, 1]}, y_axis_config={"numbers_to_include": [-1, 1]},
+            tips=False
+        )
+        radius_val_unit = 1.0
+        origin_point_unit = axes_unit.c2p(0, 0)
+        radius_point_unit = axes_unit.c2p(radius_val_unit, 0)
+        screen_radius_unit = np.linalg.norm(radius_point_unit - origin_point_unit)
+        circle_unit = Circle(radius=screen_radius_unit, color=MY_BLUE, stroke_width=3, arc_center=origin_point_unit)
+        unit_circle_group_small = VGroup(axes_unit, circle_unit).scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
+        self.unit_circle_elements = unit_circle_group_small # Store for this scene
 
-        # Ensure static elements are present
+        # Cosine Graph (Right)
+        axes_graph = Axes(
+            x_range=[0, 2 * PI + 0.1, PI / 2],
+            y_range=[-1.2, 1.2, 1],
+            x_length=8, y_length=4,
+            axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
+            x_axis_config={"include_numbers": False},
+            y_axis_config={"numbers_to_include": [-1, 0, 1]},
+            tips=False
+        )
+        x_labels_pi = VGroup()
+        custom_x_values_labels = {
+            0: "0", PI/2: r"\pi/2", PI: r"\pi", 3*PI/2: r"3\pi/2", 2*PI: r"2\pi"
+        }
+        for x_val, label_tex in custom_x_values_labels.items():
+            label = MathTex(label_tex, font_size=24, color=MY_DARK_GRAY)
+            label.next_to(axes_graph.c2p(x_val, 0), DOWN, buff=MED_SMALL_BUFF)
+            x_labels_pi.add(label)
+        x_graph_label = axes_graph.get_x_axis_label(r"\theta", edge=DOWN, direction=DOWN, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
+        y_graph_label = axes_graph.get_y_axis_label(r"\cos \theta", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
+        axes_graph_labels = VGroup(x_graph_label, y_graph_label)
+        graph_group = VGroup(axes_graph, axes_graph_labels, x_labels_pi).to_edge(RIGHT, buff=LARGE_BUFF)
+        cosine_graph_obj = axes_graph.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=3)
+        self.graph_elements = VGroup(graph_group, cosine_graph_obj) # Store for this scene
+
+        # Add recreated elements to scene
         self.add(self.unit_circle_elements, self.graph_elements)
 
-        # Retrieve necessary components
-        graph_group = self.graph_elements.submobjects[0]
-        cosine_graph_obj = self.graph_elements.submobjects[1]
-        axes_graph = None
-        for item in graph_group:
-            if isinstance(item, Axes):
-                axes_graph = item
-                break
-        if not axes_graph:
-            print("Error: Could not find axes_graph in Scene 4.")
-            return
-        axes_unit = None
-        for item in self.unit_circle_elements:
-             if isinstance(item, Axes):
-                 axes_unit = item
-                 break
-        if not axes_unit:
-             print("Error: Could not find axes_unit in Scene 4.")
-             return
-
         # Title
-        title = Text("Key Values and Properties of Cosine", font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF) # Standard buffer
+        title = Text("Key Values and Properties of Cosine", font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
 
         # Key points calculation
         key_angles = [0, PI / 2, PI, 3 * PI / 2, 2 * PI]
@@ -552,31 +551,18 @@ class CombinedScene(MovingCameraScene):
         # Vertical Lines and Labels
         v_lines = VGroup()
         v_labels = VGroup()
-        # Find existing Pi labels from graph_group
-        existing_x_labels = {}
-        for item in graph_group:
-            if isinstance(item, VGroup): # This should be x_labels_pi
-                for lbl in item:
-                    if isinstance(lbl, MathTex):
-                        # Store label text -> label object mapping
-                        existing_x_labels[lbl.tex_string] = lbl
+        existing_x_labels = {lbl.tex_string: lbl for lbl in x_labels_pi} # Use dict for lookup
 
         for angle in key_angles:
             line = axes_graph.get_vertical_line(axes_graph.i2gp(angle, cosine_graph_obj), color=MY_DARK_GRAY, stroke_width=1, line_func=DashedLine)
-            label_text_raw = ""
-            if np.isclose(angle, 0): label_text_raw = "0"
-            elif np.isclose(angle, PI/2): label_text_raw = r"\pi/2"
-            elif np.isclose(angle, PI): label_text_raw = r"\pi"
-            elif np.isclose(angle, 3*PI/2): label_text_raw = r"3\pi/2"
-            elif np.isclose(angle, 2*PI): label_text_raw = r"2\pi"
+            label_text_raw = custom_x_values_labels.get(angle, "") # Get label text from dict
 
             if label_text_raw:
-                # Use existing label if found, otherwise create (should always be found now)
                 label = existing_x_labels.get(label_text_raw)
                 if label is None:
                     print(f"Warning: Could not find existing label for {label_text_raw}, creating new.")
                     label = MathTex(label_text_raw, font_size=24, color=MY_DARK_GRAY).next_to(axes_graph.c2p(angle, 0), DOWN, buff=MED_SMALL_BUFF)
-                v_labels.add(label) # Add the label (existing or new)
+                v_labels.add(label)
                 v_lines.add(line)
 
         # Horizontal Lines and Labels
@@ -584,14 +570,12 @@ class CombinedScene(MovingCameraScene):
         h_labels = VGroup()
         for val in [-1, 0, 1]:
             line = axes_graph.get_horizontal_line(axes_graph.c2p(0, val), color=MY_DARK_GRAY, stroke_width=1, line_func=DashedLine)
-            # Get label from y-axis numbers
             label = axes_graph.get_y_axis().get_number_mobject(val)
-            if label is None: # Create if not found
+            if label is None:
                  label = MathTex(str(val), font_size=24, color=MY_DARK_GRAY)
-                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF) # Increased buffer
-            else: # Reposition if found
-                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF) # Increased buffer
-
+                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF)
+            else:
+                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF)
             h_lines.add(line)
             h_labels.add(label)
 
@@ -602,7 +586,6 @@ class CombinedScene(MovingCameraScene):
             highlights.add(highlight)
 
         # Arrows
-        radius_val_unit = 1.0
         unit_circle_points_coords = [
             axes_unit.c2p(radius_val_unit * np.cos(angle), radius_val_unit * np.sin(angle)) for angle in key_angles
         ]
@@ -626,11 +609,11 @@ class CombinedScene(MovingCameraScene):
             else:
                 print("Warning: Scene 4 TTS failed.")
 
-            subtitle_voice = Text(voice_text_04, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF) # Standard buffer
+            subtitle_voice = Text(voice_text_04, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             # --- Animation ---
             self.play(FadeIn(title), FadeIn(subtitle_voice), run_time=1.0)
-            self.add(v_labels, h_labels) # Ensure labels are added
+            self.add(v_labels, h_labels) # Ensure labels are added before animation
             self.play(Create(v_lines), Create(h_lines), FadeIn(v_labels), FadeIn(h_labels), run_time=2.0)
 
             highlight_anims = []
@@ -665,19 +648,30 @@ class CombinedScene(MovingCameraScene):
         scene_num_05 = self.get_scene_number("05", color=MY_CONCLUSION_SUB)
         self.add(scene_num_05)
 
-        # Faded Elements
-        for mob in self.unit_circle_elements:
-             if mob is not None and hasattr(mob, 'clear_updaters') and mob.get_updaters(): mob.clear_updaters()
-        for mob in self.graph_elements:
-             if mob is not None and hasattr(mob, 'clear_updaters') and mob.get_updaters(): mob.clear_updaters()
+        # --- Recreate faded elements for conclusion ---
+        # Unit Circle (Left, Faded)
+        axes_unit_faded = Axes(
+            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=4, y_length=4,
+            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 1, "include_numbers": False}, # Fainter, no numbers
+            tips=False
+        ).scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
+        radius_val_unit = 1.0
+        origin_point_unit = axes_unit_faded.c2p(0, 0)
+        radius_point_unit = axes_unit_faded.c2p(radius_val_unit, 0)
+        screen_radius_unit = np.linalg.norm(radius_point_unit - origin_point_unit)
+        circle_unit_faded = Circle(radius=screen_radius_unit, color=MY_BLUE, stroke_width=1, arc_center=origin_point_unit) # Fainter
+        unit_circle_faded = VGroup(axes_unit_faded, circle_unit_faded)
 
-        self.add(self.unit_circle_elements, self.graph_elements)
-        faded_elements = VGroup(self.unit_circle_elements, self.graph_elements)
+        # Cosine Graph (Right, Faded)
+        axes_graph_faded = Axes(
+            x_range=[0, 2 * PI + 0.1, PI / 2], y_range=[-1.2, 1.2, 1], x_length=8, y_length=4,
+            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 1, "include_numbers": False}, # Fainter, no numbers
+            tips=False
+        ).to_edge(RIGHT, buff=LARGE_BUFF)
+        cosine_graph_faded = axes_graph_faded.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=1) # Fainter
+        graph_faded = VGroup(axes_graph_faded, cosine_graph_faded)
 
-        # Position faded elements
-        self.unit_circle_elements.move_to(LEFT * (config.frame_width / 4))
-        self.graph_elements.move_to(RIGHT * (config.frame_width / 4))
-        faded_elements.set_opacity(0.3) # Apply fade *after* positioning
+        faded_elements = VGroup(unit_circle_faded, graph_faded).set_opacity(0.3)
 
         # Final Text
         final_text = Text("Cosine: The x-coordinate on the Unit Circle!",
@@ -685,7 +679,7 @@ class CombinedScene(MovingCameraScene):
         final_text.move_to(ORIGIN + UP * 0.5)
 
         thanks_text = Text("Thank You!", font_size=36, color=MY_CONCLUSION_SUB)
-        thanks_text.next_to(final_text, DOWN, buff=MED_LARGE_BUFF) # Use standard buffer
+        thanks_text.next_to(final_text, DOWN, buff=MED_LARGE_BUFF)
 
         # --- TTS ---
         voice_text_05 = "So, remember: the cosine of an angle theta is simply the x-coordinate of the point where the terminal side of the angle intersects the unit circle. Understanding this connection is key to mastering trigonometry. Thank you for watching!"
@@ -695,13 +689,12 @@ class CombinedScene(MovingCameraScene):
             else:
                 print("Warning: Scene 5 TTS failed.")
 
-            subtitle_voice = Text(voice_text_05, font_size=28, color=MY_CONCLUSION_SUB, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF) # Standard buffer
+            subtitle_voice = Text(voice_text_05, font_size=28, color=MY_CONCLUSION_SUB, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             # --- Animation ---
             self.play(FadeIn(faded_elements), run_time=1.0)
             self.play(FadeIn(subtitle_voice), run_time=0.5)
-            # Use Write for Text to avoid potential issues, or FadeIn
-            self.play(FadeIn(final_text), run_time=2.0)
+            self.play(FadeIn(final_text), run_time=2.0) # Use FadeIn for Text
             self.play(FadeIn(thanks_text), run_time=1.0)
 
             self.play(self.camera.frame.animate.scale(0.9).move_to(final_text.get_center()), run_time=1.5)
