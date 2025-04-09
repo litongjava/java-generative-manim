@@ -1449,6 +1449,141 @@ brace_label.set_color(YELLOW)
 **6. Goal:**
 Ensure the generated Manim code avoids `TypeError` when creating brace labels by correctly separating the label creation/positioning (using `brace.get_tex("string")`) from the subsequent styling (using `.set_font_size()`, `.set_color()` on the returned object).
 
+### 【Manim Code Generation Rule: Correct Handling of Custom Axis Labels (e.g., Pi Labels) in `Axes`】
+
+**1. Problem Description:**
+Attempting to use the `label_formatter` keyword argument within the `axis_config`, `x_axis_config`, or `y_axis_config` dictionaries when creating an `Axes` object (e.g., `Axes(..., x_axis_config={"label_formatter": lambda v: ...})`) results in a `TypeError: Mobject.__init__() got an unexpected keyword argument 'label_formatter'` error during the initialization of the underlying `NumberLine`.
+
+**2. Reason:**
+The `label_formatter` parameter is **not** a valid or supported keyword argument within the axis configuration dictionaries passed to the `Axes` constructor in Manim Community (e.g., v0.19.0). The configuration dictionary is passed down to the `NumberLine` constructor, which ultimately inherits from `Mobject`, and `Mobject` does not accept `label_formatter`.
+
+**3. Correct Practice (Must Follow):**
+
+*   **Standard Numerical Labels:** For standard numerical labels on axes:
+    *   Use `include_numbers=True` within the relevant config dictionary (`axis_config`, `x_axis_config`, `y_axis_config`).
+    *   Specify which numbers to include using `numbers_to_include=[...]`.
+    *   Control decimal formatting using `decimal_number_config={"num_decimal_places": ...}`.
+    *   Alternatively, use `axes_object.add_coordinates()` after creating the axes.
+
+*   **Custom Labels (e.g., π/2, π, etc.):** To display non-numerical or specially formatted labels like fractions of Pi, you **must** create and position them manually *after* the `Axes` object has been created:
+    *   **Step 1:** Create the `Axes` object (potentially without default number labels on the relevant axis if they would overlap, e.g., by setting `include_numbers=False` in the specific axis config).
+    *   **Step 2:** For each custom label, create a `MathTex` (for LaTeX) or `Text` object (e.g., `pi_label = MathTex(r"\pi")`).
+    *   **Step 3:** Determine the position on the axis corresponding to the label using `axes_object.c2p(x_value, y_value)` (usually `y=0` for x-axis labels, `x=0` for y-axis labels).
+    *   **Step 4:** Position the created label `Mobject` relative to the calculated axis point using `.next_to(axis_point, DIRECTION, buff=...)`.
+    *   **Step 5 (Optional):** Group all manually created labels into a `VGroup` for easier management.
+
+**4. Code Example (Correct Practice for Pi Labels on X-Axis):**
+
+```python
+from manim import Axes, MathTex, VGroup, DOWN, PI, np # Necessary imports
+
+# Assume config colors like MY_DARK_GRAY are defined
+
+# Step 1: Create Axes (potentially disable default numbers on x-axis if needed)
+axes_graph = Axes(
+    x_range=[0, 2 * PI + 0.1, PI / 2],
+    y_range=[-1.2, 1.2, 1],
+    x_length=8, y_length=4,
+    axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2},
+    x_axis_config={
+        "include_numbers": False # Disable default numbers to avoid overlap
+    },
+    y_axis_config={"include_numbers": True, "numbers_to_include": [-1, 0, 1]},
+    tips=False
+)
+# Add standard y-coordinates if needed
+axes_graph.add_coordinates(y_values=[-1, 1]) # Example for y
+
+# Step 2-5: Manually create and position custom Pi labels for X-axis
+x_labels_pi = VGroup()
+custom_x_values = {
+    PI/2: r"\pi/2",
+    PI: r"\pi",
+    3*PI/2: r"3\pi/2",
+    2*PI: r"2\pi"
+    # Add 0 if needed: 0: "0"
+}
+
+for x_val, label_tex in custom_x_values.items():
+    # Step 2: Create MathTex label
+    label = MathTex(label_tex, font_size=24, color=MY_DARK_GRAY)
+    # Step 3: Get axis point
+    axis_point = axes_graph.c2p(x_val, 0)
+    # Step 4: Position label
+    label.next_to(axis_point, DOWN, buff=0.15)
+    x_labels_pi.add(label)
+
+# Add the axes and the custom labels to the scene
+# self.add(axes_graph, x_labels_pi)
+```
+
+**5. Goal:**
+Ensure the generated Manim code avoids the `TypeError` related to `label_formatter` by using the correct methods for axis number configuration and by manually creating and positioning custom labels (like Pi fractions) instead of attempting unsupported configuration options.
+
+---
+
+### 【Manim Code Generation Rule: Ensure Graph Objects Have Points Before Using Point Calculation Methods】
+
+**1. Problem Description:**
+Attempting to use methods that rely on the geometric points of a graph object (like `Axes.input_to_graph_point`, `Mobject.point_from_proportion`, or methods calculating intersections/distances based on the graph's shape) can trigger an `Exception: Cannot call Mobject.point_from_proportion for a Mobject with no points` (or similar errors indicating missing points).
+
+**2. Reason:**
+These methods require the target graph object (typically a `VMobject` created by `Axes.plot`, `ParametricFunction`, etc.) to have a defined set of points representing its curve or shape. The error occurs if, at the time the method is called, the graph object reference points to an object that:
+    *   Has not yet been fully generated or had its points calculated.
+    *   Was created but never added to the scene or a relevant group, potentially affecting its state.
+    *   Was previously removed from the scene or cleared.
+    *   Was part of a complex animation sequence (like using `TracedPath` followed by replacement) where the final, static graph object wasn't correctly instantiated, added, or persisted with its points before being used in subsequent calculations.
+
+**3. Correct Practice (Must Follow):**
+
+*   **Ensure Creation and Points:** Verify that the graph object (e.g., `my_graph = axes.plot(...)`) is created successfully. Methods like `axes.plot` typically generate points automatically.
+*   **Ensure Persistence:** The graph object **must exist and contain its points** when methods like `input_to_graph_point` are called. This means:
+    *   The object must be added to the scene or a parent `Group` if its geometry is needed later.
+    *   It must **not** be removed (`self.remove(my_graph)`) or faded out *before* the calculation occurs, unless a separate, persistent copy exists.
+    *   When managing objects across different methods or scenes (e.g., using `self.my_graph`), ensure the reference is valid and points to the object *with its points intact*. Be careful with scene clearing logic (`clear_and_reset`) – ensure necessary graph objects are recreated or correctly preserved if needed in subsequent steps.
+    *   If using dynamic drawing techniques (like `TracedPath`), ensure the final intended static graph `VMobject` (e.g., the one created by `axes.plot`) is properly added to the scene/group *after* the tracing animation, replacing the temporary trace if necessary, before being used for point calculations.
+*   **Correct Referencing:** Always use the correct variable or attribute (`self.my_graph`) that holds the reference to the intended, point-containing graph object.
+
+**4. Code Example (Conceptual):**
+
+```python
+from manim import Axes, Create, FadeOut, Dot, Scene # Necessary imports
+
+class PointCalculationExample(Scene):
+    def construct(self):
+        axes = Axes()
+        my_func = lambda x: x**2
+        graph = axes.plot(my_func, color=BLUE)
+
+        # Correct: Create graph, add it, then use it
+        self.play(Create(axes), Create(graph))
+        # 'graph' exists and has points here
+        point_on_graph = axes.input_to_graph_point(1, graph) # OK
+        dot = Dot(point_on_graph, color=YELLOW)
+        self.play(FadeIn(dot))
+        self.wait()
+
+        # Incorrect: Remove graph BEFORE calculation
+        # self.play(FadeOut(graph))
+        # # Now 'graph' might still be referenced, but is faded/removed from scene,
+        # # potentially leading to issues depending on internal state or if cleared.
+        # # A more direct error occurs if the object reference itself is lost or cleared.
+        # try:
+        #     point_on_graph_error = axes.input_to_graph_point(2, graph) # RISKY/ERROR PRONE
+        # except Exception as e:
+        #     print(f"Error expected: {e}") # Might raise "no points" or other errors
+
+        # Also Incorrect: Using a graph object that was never properly added or generated
+        # empty_graph = VMobject() # Has no points
+        # try:
+        #    point_error = axes.input_to_graph_point(1, empty_graph) # ERROR: No points
+        # except Exception as e:
+        #    print(f"Error expected: {e}")
+```
+
+**5. Goal:**
+Prevent the `Exception: ... Mobject with no points` by ensuring that any `VMobject` representing a graph has its points generated and is correctly persisted and referenced *before* being passed to methods like `Axes.input_to_graph_point` or `Mobject.point_from_proportion` that require accessing its geometric point data. Pay close attention to object lifecycle management across animations and scene transitions.
+
 ## complete Python code example
 here is the complete Python code example.
 
