@@ -24,7 +24,7 @@ public class TranslatorService {
     values.put("source_text", srcText);
 
     String prompt = template.renderToString(values);
-    String response = GeminiClient.chatWithModel(GoogleGeminiModels.GEMINI_2_0_FLASH_EXP, "user", prompt);
+    String response = GeminiClient.chatWithModel(GoogleGeminiModels.GEMINI_2_0_FLASH_THINKING_EXP, "user", prompt);
     return response;
   }
 

@@ -179,7 +179,7 @@ import hashlib
 import requests
 from contextlib import contextmanager
 
-CACHE_DIR = "tts_cache"
+CACHE_DIR = "#(output_path)/audio"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
@@ -1783,7 +1783,7 @@ MY_WHITE = "#FFFFFF"  # White
 MY_BLACK = "#000000"  # Black
 
 # --- TTS Caching Setup ---
-CACHE_DIR = "tts_cache"
+CACHE_DIR = "#(output_path)/audio"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
