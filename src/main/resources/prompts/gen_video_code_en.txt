@@ -1584,6 +1584,80 @@ class PointCalculationExample(Scene):
 **5. Goal:**
 Prevent the `Exception: ... Mobject with no points` by ensuring that any `VMobject` representing a graph has its points generated and is correctly persisted and referenced *before* being passed to methods like `Axes.input_to_graph_point` or `Mobject.point_from_proportion` that require accessing its geometric point data. Pay close attention to object lifecycle management across animations and scene transitions.
 
+### 【Manim Code Generation Rule: Correct Usage of `Axes.add_coordinates()` and `NumberLine.add_numbers()`】
+
+**1. Problem Description:**
+Calling `Axes.add_coordinates()` with keyword arguments like `x_values=[...]` or `y_values=[...]` (e.g., `axes.add_coordinates(x_values=[0, 1], y_values=[-1, 1])`) triggers a `TypeError: NumberLine.add_numbers() got multiple values for argument 'x_values'` (or `y_values`).
+
+**2. Reason:**
+The `Axes.add_coordinates()` method internally calls the `add_numbers()` method of the underlying `NumberLine` objects (the axes). The `NumberLine.add_numbers()` method expects the list of numerical values to be added as its **first positional argument**, not as a keyword argument named `x_values` or `y_values`. Passing these as keyword arguments to `add_coordinates` causes them to be incorrectly forwarded, leading to `add_numbers` receiving the argument list both positionally (implicitly) and via the keyword, resulting in the "multiple values" `TypeError`.
+
+**3. Correct Practice (Must Follow):**
+
+*   **Primary Method (Configuration):** The standard and recommended way to specify which numbers appear on axes is during `Axes` initialization using the configuration dictionaries:
+    *   Set `include_numbers=True` in `axis_config`, `x_axis_config`, or `y_axis_config`.
+    *   Provide the specific numbers using `numbers_to_include=[...]` within the relevant config dictionary.
+    ```python
+    # Correct: Using config dictionaries
+    axes = Axes(
+        # ... other ranges/lengths ...
+        axis_config={"include_numbers": True}, # Enable numbers generally
+        x_axis_config={"numbers_to_include": [0, 1, 2]},
+        y_axis_config={"numbers_to_include": [-1, 0, 1]}
+    )
+    ```
+
+*   **Secondary Method (Direct `add_numbers`):** If numbers need to be added *after* the `Axes` object is created, call the `add_numbers()` method directly on the specific axis (`NumberLine`) object, passing the list of values **positionally**:
+    ```python
+    axes = Axes(...) # Create axes, maybe with include_numbers=False initially
+    x_axis = axes.get_x_axis()
+    y_axis = axes.get_y_axis()
+    # Correct: Calling add_numbers directly with positional list
+    x_axis.add_numbers([0, 1, 2])
+    y_axis.add_numbers([-1, 0, 1])
+    # self.add(x_axis.numbers, y_axis.numbers) # Need to add the created numbers
+    ```
+    *Note: When using `add_numbers` directly, you might need to explicitly add the returned number `VGroup` (e.g., `axis.numbers`) to the scene.*
+
+*   **Prohibited Usage:** **Absolutely forbid** calling `Axes.add_coordinates()` with `x_values=...` or `y_values=...` as **keyword arguments**.
+
+**4. Code Example (Illustrating Correct vs. Incorrect):**
+
+```python
+from manim import Axes, Create # Necessary imports
+
+# --- Correct Usage ---
+# Method 1: Config Dictionaries (Preferred)
+axes_config = Axes(
+    x_range=[0, 3], y_range=[-2, 2],
+    axis_config={"include_numbers": True},
+    x_axis_config={"numbers_to_include": [0, 1, 2]},
+    y_axis_config={"numbers_to_include": [-1, 0, 1]}
+)
+# self.play(Create(axes_config))
+
+# Method 2: Direct add_numbers (Less common for initial setup)
+axes_direct = Axes(x_range=[0, 3], y_range=[-2, 2], axis_config={"include_numbers": False})
+x_nums_direct = axes_direct.get_x_axis().add_numbers([0, 1, 2])
+y_nums_direct = axes_direct.get_y_axis().add_numbers([-1, 0, 1])
+# self.play(Create(axes_direct), FadeIn(x_nums_direct), FadeIn(y_nums_direct))
+
+
+# --- Incorrect Usage (Causes TypeError) ---
+# axes_error = Axes(x_range=[0, 3], y_range=[-2, 2])
+# try:
+#     # Incorrect: Using keyword arguments in add_coordinates
+#     axes_error.add_coordinates(x_values=[0, 1, 2], y_values=[-1, 0, 1])
+# except TypeError as e:
+#     print(f"Error expected: {e}")
+# # self.play(Create(axes_error))
+```
+
+**5. Goal:**
+Prevent the `TypeError: NumberLine.add_numbers() got multiple values for argument '...'` by ensuring axis number labels are added either through the correct configuration dictionaries during `Axes` initialization or by calling `NumberLine.add_numbers()` directly with the list of values passed as a positional argument, and avoiding the incorrect use of `x_values`/`y_values` keywords in `Axes.add_coordinates()`.
+
+---
+
 ## complete Python code example
 here is the complete Python code example.
 
