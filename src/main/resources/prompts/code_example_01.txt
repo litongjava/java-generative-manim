@@ -1,0 +1,766 @@
+```python
+# -*- coding: utf-8 -*-
+import os
+import numpy as np
+import requests
+from contextlib import contextmanager
+from manim import *
+import hashlib
+
+from moviepy import AudioFileClip # Correct import
+
+# --- Custom Colors ---
+MY_DARK_BLUE = "#1E3A8A"  # Dark Blue
+MY_LIGHT_GRAY = "#F3F4F6"  # Light Gray
+MY_MEDIUM_GRAY = "#D1D5DB"  # Medium Gray
+MY_GOLD = "#F59E0B"  # Gold
+MY_ORANGE = "#F97316"  # Orange
+MY_RED = "#DC2626"  # Red
+MY_WHITE = "#FFFFFF"  # White
+MY_BLACK = "#000000"  # Black
+
+# --- TTS Caching Setup ---
+CACHE_DIR = "#(output_path)/audio"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+class CustomVoiceoverTracker:
+    """Tracks audio path and duration for TTS."""
+
+    def __init__(self, audio_path, duration):
+        self.audio_path = audio_path
+        self.duration = duration
+
+
+def get_cache_filename(text):
+    """Generates a unique filename based on the text hash."""
+    text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    return os.path.join(CACHE_DIR, f"{text_hash}.mp3")
+
+
+@contextmanager
+def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/api/manim/tts"):
+    """
+    Fetches TTS audio, caches it, and provides path and duration.
+    Usage: with custom_voiceover_tts("text") as tracker: ...
+    """
+    cache_file = get_cache_filename(text)
+    audio_file = cache_file  # Initialize audio_file
+
+    if os.path.exists(cache_file):
+        audio_file = cache_file
+        print(f"Using cached TTS for: {text[:30]}...")
+    else:
+        print(f"Requesting TTS for: {text[:30]}...")
+        try:
+            # URL encode the input text to handle special characters
+            input_text_encoded = requests.utils.quote(text)
+            url = f"{base_url}?token={token}&input={input_text_encoded}"
+
+            response = requests.get(url, stream=True, timeout=60)  # Added timeout
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+
+            with open(cache_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            audio_file = cache_file
+            print("TTS downloaded and cached.")
+
+        except requests.exceptions.RequestException as e:
+            print(f"TTS API request failed: {e}")
+            # Fallback: create a dummy tracker with zero duration
+            tracker = CustomVoiceoverTracker(None, 0)
+            yield tracker
+            return  # Exit context manager
+
+    # Ensure audio file exists before processing with MoviePy
+    if audio_file and os.path.exists(audio_file):
+        try:
+            # Use context manager for AudioFileClip
+            with AudioFileClip(audio_file) as clip:
+                duration = clip.duration
+            print(f"Audio duration: {duration:.2f}s")
+            tracker = CustomVoiceoverTracker(audio_file, duration)
+        except Exception as e:
+            print(f"Error processing audio file {audio_file}: {e}")
+            # Fallback if audio file is corrupted or invalid
+            tracker = CustomVoiceoverTracker(None, 0)
+    else:
+        # Fallback if audio file was not created or found
+        print(f"TTS audio file not found or not created: {audio_file}")
+        tracker = CustomVoiceoverTracker(None, 0)
+
+    try:
+        yield tracker
+    finally:
+        # No cleanup needed here as we are caching
+        pass
+
+
+# -----------------------------
+# CombinedScene: Integrates all scenes and adds subtitles and audio
+# -----------------------------
+class CombinedScene(MovingCameraScene):
+    """
+    Combines all scenes of the Manim animation, explaining how to find the
+    tangent line equation for the function f(x)=x^2.
+    """
+
+    def construct(self):
+        # Use a scene-specific time tracker for updaters if needed outside TTS timing
+        self.scene_time_tracker = ValueTracker(0)
+
+        # --- Play Scenes Sequentially ---
+        self.play_scene_01()
+        self.clear_and_reset()
+
+        self.play_scene_02()
+        self.clear_and_reset()
+
+        self.play_scene_03()
+        self.clear_and_reset()
+
+        self.play_scene_04()
+        self.clear_and_reset()
+
+        self.play_scene_05()
+        self.clear_and_reset()
+
+        # End of animation message
+        final_message = Text("Animation finished, thanks for watching! 😄", font_size=48, color=MY_WHITE)
+        bg_final = Rectangle(width=config.frame_width, height=config.frame_height, fill_color=MY_BLACK, fill_opacity=1,
+                             stroke_width=0).set_z_index(-10)
+        self.add(bg_final)
+        self.play(FadeIn(final_message))
+        self.wait(2)
+
+    def get_scene_number(self, number_str):
+        """Creates and positions the scene number."""
+        scene_num = Text(number_str, font_size=24, color=MY_WHITE)
+        # Ensure the scene number is always within bounds
+        scene_num.to_corner(UR, buff=0.3)  # Use smaller buff if needed
+        scene_num.set_z_index(10)  # Ensure it's above background
+        return scene_num
+
+    def clear_and_reset(self):
+        """Clears all objects in the current scene and resets the camera."""
+        # Clear updaters explicitly from all mobjects
+        for mob in self.mobjects:
+            if mob is not None and hasattr(mob, 'clear_updaters'): # Check if method exists
+                 if mob.get_updaters(): # Check if there are updaters before clearing
+                    mob.clear_updaters()
+
+        # Use Group for potentially mixed object types
+        valid_mobjects = [m for m in self.mobjects if m is not None]
+        all_mobjects = Group(*valid_mobjects)
+
+        if all_mobjects:
+            # Fade out existing objects
+            self.play(FadeOut(all_mobjects, shift=DOWN * 0.5), run_time=0.5)
+
+        # Clear the scene's mobject list
+        self.clear() # self.mobjects is cleared by self.clear()
+
+        # Reset camera position and scale
+        self.camera.frame.move_to(ORIGIN)
+        # Ensure frame dimensions match configuration
+        self.camera.frame.set(width=config.frame_width, height=config.frame_height)
+        # Reset camera orientation (important if rotations were applied)
+        # For MovingCameraScene, resetting scale and position is usually enough.
+        # If explicit rotation was done: self.camera.frame.set_euler_angles(theta=0, phi=0, gamma=0) - check API
+
+        # Reset the custom time tracker
+        self.scene_time_tracker.set_value(0)
+        self.wait(0.1)  # Short pause after reset
+
+    def star_updater(self, star_group, dt):
+        """Updates star opacity for a twinkling effect (Uses scene_time_tracker). Applied to the VGroup."""
+        current_time = self.scene_time_tracker.get_value()
+        for star in star_group:
+            if isinstance(star, Dot): # Ensure it's a Dot before accessing attributes
+                # Retrieve stored parameters or use defaults
+                base_opacity = getattr(star, "base_opacity", 0.5)
+                frequency = getattr(star, "frequency", 0.5)
+                phase = getattr(star, "phase", 0)
+
+                # Calculate opacity based on sine wave
+                opacity_variation = 0.4 * np.sin(2 * PI * frequency * current_time + phase)
+                target_opacity = np.clip(base_opacity + opacity_variation, 0.1, 0.9)  # Clamp opacity
+
+                # Apply the calculated opacity
+                # Use set_opacity which handles both fill and stroke
+                star.set_opacity(target_opacity)
+
+        # Manually update the scene time tracker (only once per frame for the group)
+        self.scene_time_tracker.increment_value(dt)
+
+    # --- Scene 1: Welcome & Starry Background ---
+    def play_scene_01(self):
+        """Scene 1: Welcome introduction and starry background."""
+        self.scene_time_tracker.set_value(0)  # Reset time for this scene
+
+        # Background
+        bg1 = Rectangle(
+            width=config.frame_width,
+            height=config.frame_height,
+            fill_color=MY_DARK_BLUE,
+            fill_opacity=1.0,
+            stroke_width=0
+        )
+        bg1.set_z_index(-10)
+        self.add(bg1)
+
+        # Stars
+        stars = VGroup()
+        num_stars = 200
+        for _ in range(num_stars):
+            # Ensure stars are within frame boundaries
+            x_pos = np.random.uniform(-config.frame_width / 2 * 0.98, config.frame_width / 2 * 0.98)
+            y_pos = np.random.uniform(-config.frame_height / 2 * 0.98, config.frame_height / 2 * 0.98)
+            star_dot = Dot(point=[x_pos, y_pos, 0], radius=np.random.uniform(0.01, 0.03), color=MY_WHITE)
+            # Store custom data directly on the mobject
+            star_dot.base_opacity = np.random.uniform(0.3, 0.7)
+            star_dot.frequency = np.random.uniform(0.3, 0.8)
+            star_dot.phase = np.random.uniform(0, 2 * PI)
+            # Set initial opacity using the method, not constructor
+            star_dot.set_opacity(star_dot.base_opacity)
+            stars.add(star_dot)
+
+        # Add the updater to the stars group
+        stars.add_updater(self.star_updater)
+        self.add(stars)
+
+        # Scene Number
+        scene_num_01 = self.get_scene_number("01")
+        self.add(scene_num_01)
+
+        # Title and Subtitle
+        title = Text("Hello everyone, welcome to this math explanation video 👋", font_size=48, color=MY_WHITE)
+        title.move_to(UP * 2.5)  # Position using move_to or shift
+
+        subtitle_part1 = Text("How to find the tangent line equation for the function", font_size=36, color=MY_WHITE)
+        subtitle_part2 = MathTex("f(x)=x^2", font_size=42, color=MY_ORANGE)
+        subtitle_part3 = Text(" 🤔", font_size=36, color=MY_WHITE) # Emoji only
+        subtitle = VGroup(subtitle_part1, subtitle_part2, subtitle_part3).arrange(RIGHT, buff=0.2)
+        subtitle.next_to(title, DOWN, buff=0.5)
+
+        # --- TTS Integration ---
+        voice_text_01 = "Hello everyone, welcome to this math explanation video. 👋 In this episode, we will explain how to find the tangent line equation for the function f(x) equals x squared. 🤔"
+        with custom_voiceover_tts(voice_text_01) as tracker:
+            # Check if audio is available
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 1 TTS audio failed or has zero duration.")
+                # If TTS fails, we'll just run the animations without sound sync
+
+            # Subtitle for the voiceover
+            subtitle_voice = Text(
+                voice_text_01,
+                font_size=32,
+                color=MY_WHITE,
+                # Use width for automatic line breaking
+                width=config.frame_width - 2,
+                should_center=True  # Center multi-line text
+            ).to_edge(DOWN, buff=0.5)
+
+            # Animation sequence synchronized with TTS (if available)
+            anim_runtime_title = 1.5
+            anim_runtime_subtitle = 2.0
+            fade_out_duration = 1.0
+            total_anim_duration_planned = anim_runtime_title + anim_runtime_subtitle
+
+            # Animation Group 1: Title + Subtitle Voice Fade In
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice, run_time=0.5),  # Quick fade in for subtitle
+                    FadeIn(title, shift=UP * 0.5, run_time=anim_runtime_title),
+                    lag_ratio=0.0  # Start simultaneously
+                ),
+                run_time=anim_runtime_title  # Overall duration for this group
+            )
+
+            # Animation Group 2: Subtitle parts appear
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_part1, shift=RIGHT * 0.2),
+                    Write(subtitle_part2),  # MathTex uses Write
+                    FadeIn(subtitle_part3, shift=LEFT * 0.2),
+                    lag_ratio=0.2  # Slight delay between parts
+                ),
+                run_time=anim_runtime_subtitle
+            )
+
+            # Calculate wait time based on audio duration vs animation time
+            if tracker.duration > 0:
+                # Time already spent in animations
+                elapsed_time = total_anim_duration_planned
+                # Time needed for fade out at the end
+                time_for_fadeout = fade_out_duration
+                # Calculate remaining time to wait
+                remaining_time = tracker.duration - elapsed_time - time_for_fadeout
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                # If no audio, just wait a bit after animations
+                self.wait(1.0)
+
+            # Fade out the voiceover subtitle
+            self.play(FadeOut(subtitle_voice), run_time=fade_out_duration)
+
+        # Keep stars and title/subtitle visible for a moment before clearing
+        self.wait(1)
+
+    # --- Scene 2: Tangent Concept & Problem Background ---
+    def play_scene_02(self):
+        """Scene 2: Tangent concept and problem background introduction."""
+        self.scene_time_tracker.set_value(0)  # Reset time
+
+        # Background
+        bg2 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg2)
+
+        # Scene Number
+        scene_num_02 = self.get_scene_number("02")
+        self.add(scene_num_02)
+
+        # Layout: Left Text, Right Graph
+        left_margin = LEFT * (config.frame_width / 4)
+        right_margin = RIGHT * (config.frame_width / 4)
+
+        # Left Text explanation
+        text_lines = VGroup(
+            Text("Tangent Concept:", font_size=36, color=MY_BLACK, weight=BOLD),
+            Text("A tangent line represents the instantaneous direction of a curve at a point.", font_size=30, color=MY_BLACK),
+            # Combine Text and MathTex for inline formula
+            VGroup(
+                Text("For the function ", font_size=30, color=MY_BLACK),
+                MathTex("f(x)=x^2", font_size=36, color=MY_ORANGE),
+                Text(",", font_size=30, color=MY_BLACK), # Comma after formula
+            ).arrange(RIGHT, buff=0.15),
+            Text("the tangent reflects the curve's slope change at that point.", font_size=30, color=MY_BLACK),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+        text_lines.move_to(left_margin + UP * 1.0)  # Position on the left
+
+        # Right Graph
+        axes = Axes(
+            x_range=[-3, 3, 1],
+            y_range=[0, 9, 1],
+            x_length=6,
+            y_length=5,
+            # Use axis_config for common settings, then override if needed
+            axis_config={"include_numbers": True, "color": MY_BLACK, "stroke_width": 2, "include_tip": False},
+            x_axis_config={"include_tip": True}, # Add tip specifically to x-axis
+            y_axis_config={"include_tip": True}, # Add tip specifically to y-axis
+            tips=False, # Set overall tips to False as they are handled in axis_config
+        ).add_coordinates().move_to(right_margin + DOWN * 0.5)  # Position on the right
+
+        # Function and Plot
+        func = lambda x: x ** 2
+        parabola = axes.plot(func, color=MY_ORANGE, stroke_width=3)
+        parabola_label = axes.get_graph_label(parabola, label='f(x)=x^2', x_val=2, direction=UR)
+        # Set font size after creation for graph labels
+        parabola_label.set_color(MY_ORANGE)
+        parabola_label.set_font_size(30)
+
+        # Tangent Point
+        a = 1
+        tangent_point_coord = axes.c2p(a, func(a))  # Convert graph coords to screen coords
+        tangent_point_dot = Dot(tangent_point_coord, color=MY_RED, radius=0.1)
+        tangent_point_label = MathTex("(a, a^2)", font_size=30, color=MY_RED)
+        tangent_point_label.next_to(tangent_point_dot, DR, buff=0.1)
+
+        # Pulsing animation for the dot (simple scale pulse)
+        dot_pulse_anim = Succession(
+            ApplyMethod(tangent_point_dot.scale, 1.3, rate_func=there_and_back, run_time=1.0),
+            Wait(0.5)
+        )
+
+        # --- TTS Integration ---
+        voice_text_02 = "First, let's understand the concept of a tangent line. A tangent line is the instantaneous direction of a curve at a specific point. For the function we are studying, f(x) equals x squared, its graph is a parabola. We are interested in how to find the tangent line at any point on this parabola, such as the point (a, a squared)."
+        with custom_voiceover_tts(voice_text_02) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 2 TTS audio failed or has zero duration.")
+
+            subtitle_voice_02 = Text(
+                voice_text_02, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            # Staggered animation appearance
+            self.play(
+                AnimationGroup(
+                    FadeIn(subtitle_voice_02, run_time=0.5),
+                    # Create Axes and Parabola first
+                    Create(axes, run_time=2.0),
+                    Create(parabola, run_time=2.0),
+                    lag_ratio=0.0  # Start subtitle and graph creation together
+                ),
+                run_time=2.0
+            )
+            # Then fade in text and labels
+            self.play(
+                AnimationGroup(
+                    FadeIn(text_lines, shift=UP * 0.5, lag_ratio=0.1),  # Fade in text lines
+                    Write(parabola_label),  # Write graph label
+                    lag_ratio=0.3  # Slight lag between text and label
+                ),
+                run_time=2.5
+            )
+            # Finally, show the tangent point
+            self.play(
+                GrowFromCenter(tangent_point_dot),
+                Write(tangent_point_label),
+                run_time=1.0
+            )
+
+            # Play the dot pulse animation while text/graph is shown
+            self.play(dot_pulse_anim)  # Run the pulsing animation once
+
+            # Calculate wait time
+            elapsed_time = 2.0 + 2.5 + 1.0 + dot_pulse_anim.get_run_time()
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - elapsed_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            # Fade out subtitle
+            self.play(FadeOut(subtitle_voice_02), run_time=1.0)
+
+        self.wait(1)
+
+    # --- Scene 3: Solving Steps ---
+    def play_scene_03(self):
+        """Scene 3: Demonstration of the steps to find the tangent line."""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Light gray, maybe with faint grid)
+        bg3 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg3)
+
+        # Optional faint grid using NumberPlane
+        grid = NumberPlane(
+            x_range=[-10, 10, 1], y_range=[-6, 6, 1],
+            x_length=config.frame_width, y_length=config.frame_height,
+            background_line_style={
+                "stroke_color": MY_MEDIUM_GRAY,
+                "stroke_width": 1,
+                "stroke_opacity": 0.3  # Faint grid lines
+            },
+            # Hide axis labels and thick center lines of the grid itself
+            axis_config={"stroke_width": 0},
+            x_axis_config={"stroke_width": 0},
+            y_axis_config={"stroke_width": 0},
+        ).set_z_index(-9)  # Behind content but above background
+        self.add(grid)
+
+        # Scene Number
+        scene_num_03 = self.get_scene_number("03")
+        self.add(scene_num_03)
+
+        # Layout: Left Steps, Right Graph
+        left_margin = LEFT * (config.frame_width / 4)
+        right_margin = RIGHT * (config.frame_width / 4)
+
+        # Left: Step-by-step derivation
+        steps_title = Text("Solving Steps:", font_size=36, color=MY_BLACK, weight=BOLD).to_corner(UL, buff=1.0).shift(
+            LEFT * (config.frame_width / 4 - 1.0)) # Position left
+
+        # Combine Text (English) and MathTex (Formula) for each step
+        step1 = VGroup(Text("1. Identify the point of tangency: ", font_size=30, color=MY_BLACK),
+                       MathTex("(a, a^2)", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step2 = VGroup(Text("2. Find derivative and slope: ", font_size=30, color=MY_BLACK),
+                       MathTex("f'(x)=2x, \\quad f'(a)=2a", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step3 = VGroup(Text("3. Write the point-slope form: ", font_size=30, color=MY_BLACK),
+                       MathTex("y - a^2 = 2a(x - a)", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+        step4 = VGroup(Text("4. Simplify to get the tangent equation: ", font_size=30, color=MY_BLACK),
+                       MathTex("y = 2a(x - a) + a^2", font_size=32, color=MY_ORANGE)).arrange(RIGHT, buff=0.15)
+
+        steps_vg = VGroup(step1, step2, step3, step4).arrange(DOWN, aligned_edge=LEFT, buff=0.4)
+        steps_vg.next_to(steps_title, DOWN, aligned_edge=LEFT, buff=0.5)
+        # steps_vg.move_to(left_margin + UP * 0.5) # Adjust vertical position if needed
+
+        # Right: Graph Visualization
+        axes_step3 = Axes(
+            x_range=[-3, 3, 1], y_range=[0, 9, 1],
+            x_length=6, y_length=5,
+            axis_config={"include_numbers": True, "color": MY_BLACK, "stroke_width": 2, "include_tip": False},
+            x_axis_config={"include_tip": True},
+            y_axis_config={"include_tip": True},
+            tips=False,
+        ).add_coordinates().move_to(right_margin + DOWN * 0.5)
+
+        func = lambda x: x ** 2
+        parabola_step3 = axes_step3.plot(func, color=MY_ORANGE, stroke_width=3)
+
+        a_val = 1  # Specific value for visualization
+        slope = 2 * a_val
+        tangent_point_coord_step3 = axes_step3.c2p(a_val, func(a_val))
+        tangent_point_dot_step3 = Dot(tangent_point_coord_step3, color=MY_RED, radius=0.08)  # Slightly smaller dot
+
+        # Tangent Line Calculation (using plot for simplicity)
+        tangent_line_func = lambda x: slope * (x - a_val) + func(a_val)
+        tangent_line = axes_step3.plot(
+            tangent_line_func,
+            color=MY_GOLD,  # Use Gold for tangent line
+            stroke_width=3,
+            x_range=[a_val - 1.5, a_val + 1.5]  # Limit line length for clarity
+        )
+        tangent_label = axes_step3.get_graph_label(tangent_line, label='y = 2a(x-a)+a^2', direction=DOWN)
+        tangent_label.set_color(MY_GOLD)
+        tangent_label.set_font_size(24)  # Smaller font for line label
+
+        # --- TTS Integration ---
+        voice_text_03 = "Now let's solve it step by step. Step one, identify the point of tangency, which is the point (a, a squared) on the parabola. Step two, calculate the derivative of the function f(x), which gives f'(x) equals 2x. Then the slope at point a is f'(a) equals 2a. Step three, using the point-slope form equation, we can write the initial form of the tangent line: y minus a squared equals 2a times (x minus a). Finally, step four, simplify this equation to get the final tangent line equation: y equals 2a times (x minus a) plus a squared. Look at the graph on the right, when a=1, the point of tangency is (1,1), the slope is 2, and this is the corresponding tangent line."
+        with custom_voiceover_tts(voice_text_03) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 3 TTS audio failed or has zero duration.")
+
+            subtitle_voice_03 = Text(
+                voice_text_03, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            # Show subtitle and initial elements
+            self.play(FadeIn(subtitle_voice_03, run_time=0.5))
+            self.play(
+                FadeIn(steps_title),
+                Create(axes_step3),
+                Create(parabola_step3),
+                GrowFromCenter(tangent_point_dot_step3),
+                run_time=2.0
+            )
+
+            # Animate steps appearing one by one, synchronized with rough timing
+            # Use AnimationGroup for Text+MathTex per step
+            self.play(AnimationGroup(FadeIn(step1[0]), Write(step1[1]), lag_ratio=0.1), run_time=1.5) # Step 1
+            self.wait(1.0)  # Pause slightly between steps
+            self.play(AnimationGroup(FadeIn(step2[0]), Write(step2[1]), lag_ratio=0.1), run_time=2.0) # Step 2
+            self.wait(1.0)
+            self.play(AnimationGroup(FadeIn(step3[0]), Write(step3[1]), lag_ratio=0.1), run_time=2.5) # Step 3
+            # Show tangent line when step 3/4 appears
+            self.play(Create(tangent_line), Write(tangent_label), run_time=2.0)
+            self.wait(0.5)
+            self.play(AnimationGroup(FadeIn(step4[0]), Write(step4[1]), lag_ratio=0.1), run_time=2.5) # Step 4
+
+            # Adjust wait time based on audio duration
+            anim_time = 0.5 + 2.0 + 1.5 + 1.0 + 2.0 + 1.0 + 2.5 + 2.0 + 0.5 + 2.5  # Approximate animation time
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_03), run_time=1.0)
+
+        self.wait(1)
+
+    # --- Scene 4: Theoretical Principles ---
+    def play_scene_04(self):
+        """Scene 4: Explanation of theoretical principles and mathematical formulas."""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Medium Gray)
+        bg4 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_MEDIUM_GRAY, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg4)
+
+        # Scene Number
+        scene_num_04 = self.get_scene_number("04")
+        self.add(scene_num_04)
+
+        # Top: Derivative Definition Formula
+        deriv_title = Text("Core Principle 1: Definition of the Derivative", font_size=32, color=MY_BLACK, weight=BOLD)
+        deriv_formula = MathTex(
+            r"f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}",
+            font_size=48, color=MY_DARK_BLUE
+        )
+        deriv_group = VGroup(deriv_title, deriv_formula).arrange(DOWN, buff=0.3)
+        deriv_group.move_to(UP * 2.0)  # Position top-center
+
+        # Bottom: Point-Slope Form Formula
+        point_slope_title = Text("Core Principle 2: Point-Slope Form Equation", font_size=32, color=MY_BLACK, weight=BOLD)
+        point_slope_formula = MathTex(
+            r"y - y_1 = m(x - x_1)",
+            font_size=48, color=MY_DARK_BLUE
+        )
+        point_slope_group = VGroup(point_slope_title, point_slope_formula).arrange(DOWN, buff=0.3)
+        point_slope_group.move_to(DOWN * 2.0)  # Position bottom-center
+
+        # Arrow connecting the concepts
+        # Use Create for arrow animation
+        arrow = Arrow(
+            deriv_formula.get_bottom() + DOWN * 0.2,  # Start below deriv formula
+            point_slope_group.get_top() + UP * 0.2,  # End above point-slope group
+            buff=0.1,
+            color=MY_GOLD,
+            stroke_width=6,
+            max_tip_length_to_length_ratio=0.15,  # Adjust arrow tip size
+        )
+
+        # --- TTS Integration ---
+        voice_text_04 = "Let's review the underlying mathematical principles. We calculated the slope 2a based on the definition of the derivative, which describes how quickly the function changes at a point. And we wrote the final tangent line equation using the point-slope form of a line, where (x1, y1) is our point of tangency (a, a squared), and m is the slope 2a that we found. These two are the key theoretical foundations for solving tangent line problems."
+        with custom_voiceover_tts(voice_text_04) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 4 TTS audio failed or has zero duration.")
+
+            subtitle_voice_04 = Text(
+                voice_text_04, font_size=32, color=MY_BLACK,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+
+            self.play(FadeIn(subtitle_voice_04, run_time=0.5))
+
+            # Animate formulas and arrow
+            self.play(
+                FadeIn(deriv_group, shift=UP * 0.5),
+                run_time=2.0
+            )
+            self.wait(1.0)  # Pause before showing the next part
+            self.play(
+                FadeIn(point_slope_group, shift=DOWN * 0.5),
+                run_time=2.0
+            )
+            self.wait(0.5)
+            # Use Create for the arrow
+            self.play(Create(arrow), run_time=1.5)
+
+            # Calculate wait time
+            anim_time = 0.5 + 2.0 + 1.0 + 2.0 + 0.5 + 1.5  # Animation time
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_04), run_time=1.0)
+
+        self.wait(1)
+
+    # --- Scene 5: Summary & Review ---
+    def play_scene_05(self):
+        """Scene 5: Summary and review."""
+        self.scene_time_tracker.set_value(0)
+
+        # Background (Dark Blue or Black)
+        bg5 = Rectangle(
+            width=config.frame_width, height=config.frame_height,
+            fill_color=MY_BLACK, fill_opacity=1.0, stroke_width=0
+        ).set_z_index(-10)
+        self.add(bg5)
+
+        # Scene Number
+        scene_num_05 = self.get_scene_number("05")
+        self.add(scene_num_05)
+
+        # Summary Title
+        summary_title = Text("Summary ✨", font_size=48, color=MY_GOLD, weight=BOLD)
+        summary_title.to_edge(UP, buff=1.0)
+
+        # Key formulas
+        point_formula = MathTex("(a, a^2)", font_size=40, color=MY_WHITE)
+        point_label = Text("Point of Tangency: ", font_size=36, color=MY_WHITE)
+        point_group = VGroup(point_label, point_formula).arrange(RIGHT, buff=0.2)
+
+        deriv_result = MathTex("f'(x)=2x, \\quad f'(a)=2a", font_size=40, color=MY_WHITE)
+        deriv_label = Text("Derivative & Slope: ", font_size=36, color=MY_WHITE)
+        deriv_group = VGroup(deriv_label, deriv_result).arrange(RIGHT, buff=0.2)
+
+        tangent_eq = MathTex("y = 2a(x - a) + a^2", font_size=40, color=MY_WHITE)
+        tangent_label = Text("Tangent Equation: ", font_size=36, color=MY_WHITE)
+        tangent_group = VGroup(tangent_label, tangent_eq).arrange(RIGHT, buff=0.2)
+
+        # Arrange summary items vertically
+        summary_formulas = VGroup(point_group, deriv_group, tangent_group).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
+        summary_formulas.next_to(summary_title, DOWN, buff=0.8)
+
+        # Question at the bottom
+        question = Text("Food for thought 🤔: What other types of problems do you think tangent equations can help solve?", font_size=32, color=MY_LIGHT_GRAY)
+        question.to_edge(DOWN, buff=1.0)
+
+        # --- TTS Integration ---
+        voice_text_05 = "Alright, let's summarize. To find the tangent line equation for the function f(x) equals x squared, you need to remember three key points: first, the point of tangency coordinates (a, a squared); second, the derivative f'(x) equals 2x, which gives the slope at the point of tangency as 2a; and third, the final tangent line equation y equals 2a times (x minus a) plus a squared. Hopefully, through this video, you have mastered this method! Think about it, what other applications does the tangent line equation have in mathematics or other fields?"
+        with custom_voiceover_tts(voice_text_05) as tracker:
+            if tracker.audio_path and tracker.duration > 0:
+                self.add_sound(tracker.audio_path, time_offset=0)
+            else:
+                print("Warning: Scene 5 TTS audio failed or has zero duration.")
+
+            subtitle_voice_05 = Text(
+                voice_text_05, font_size=32, color=MY_WHITE,
+                width=config.frame_width - 2, should_center=True
+            ).to_edge(DOWN, buff=0.5)
+            # Adjust position if overlapping with the question
+            subtitle_voice_05.next_to(question, UP, buff=0.3)
+
+            # Animations
+            self.play(FadeIn(summary_title), run_time=1.0)
+            self.play(FadeIn(subtitle_voice_05, run_time=0.5))  # Show subtitle early
+
+            # Reveal formulas one by one
+            self.play(AnimationGroup(FadeIn(point_group[0]), Write(point_group[1]), lag_ratio=0.1), run_time=1.5)
+            self.wait(0.5)
+            self.play(AnimationGroup(FadeIn(deriv_group[0]), Write(deriv_group[1]), lag_ratio=0.1), run_time=1.5)
+            self.wait(0.5)
+            self.play(AnimationGroup(FadeIn(tangent_group[0]), Write(tangent_group[1]), lag_ratio=0.1), run_time=1.5)
+            self.wait(1.0)  # Pause on formulas
+
+            # Show the final question
+            self.play(FadeIn(question, shift=UP * 0.2), run_time=1.5)
+
+            # Camera Zoom In (Optional)
+            # self.play(self.camera.frame.animate.scale(1.1), run_time=1.5) # Slight zoom for focus
+
+            # Calculate wait time
+            anim_time = 1.0 + 0.5 + 1.5 + 0.5 + 1.5 + 0.5 + 1.5 + 1.0 + 1.5 # Animation time (removed zoom)
+            if tracker.duration > 0:
+                remaining_time = tracker.duration - anim_time - 1.0  # Subtract fade out time
+                if remaining_time > 0:
+                    self.wait(remaining_time)
+            else:
+                self.wait(1.0)  # Wait if no audio
+
+            self.play(FadeOut(subtitle_voice_05), run_time=1.0)
+
+        self.wait(2)  # Hold the final summary screen
+
+
+# --- Main execution block ---
+if __name__ == "__main__":
+    # Basic configuration
+    config.pixel_height = 1080  # Set resolution height
+    config.pixel_width = 1920  # Set resolution width
+    config.frame_rate = 30  # Set frame rate
+    config.output_file = "CombinedScene"  # Specify output filename
+    config.disable_caching = True  # Disable caching
+
+    # Set output directory using placeholder for Java replacement
+    # The r prefix makes it a raw string, useful if paths contain backslashes,
+    # but might not be strictly necessary here.
+    config.media_dir = r"#(output_path)"  # IMPORTANT: Use the placeholder
+
+    # Create and render the scene
+    scene = CombinedScene()
+    scene.render()
+
+    print(f"Scene rendering finished. Output in: {config.media_dir}")
+```
