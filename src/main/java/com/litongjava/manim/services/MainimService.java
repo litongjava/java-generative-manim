@@ -127,6 +127,14 @@ public class MainimService {
     }
 
     //log.info("code:{}", code);
+    String message = "Start run python code";
+    log.info("value:{}", value);
+
+    if (channelContext != null) {
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", message));
+      SsePacket ssePacket = new SsePacket("progress", jsonBytes);
+      Tio.bSend(channelContext, ssePacket);
+    }
     ProcessResult executeMainmCode = linuxService.executeCode(code);
 
     String stdErr = executeMainmCode.getStdErr();
