@@ -117,8 +117,8 @@ public class MainimService {
       executeMainmCode = linuxService.fixCodeAndRerun(topic, md5, code, stdErr, messages, geminiChatRequestVo, channelContext);
     }
 
-    output = executeMainmCode.getOutput();
-    if (executeMainmCode != null && StrUtil.isNotBlank(output)) {
+    if (executeMainmCode != null && StrUtil.isNotBlank(executeMainmCode.getOutput())) {
+      output = executeMainmCode.getOutput();
       String url = video_server_name + output;
       if (channelContext != null) {
         byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));

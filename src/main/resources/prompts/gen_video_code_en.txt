@@ -1856,3 +1856,155 @@ To reference or highlight a specific side of a `Polygon`:
 
 **Error Message:**
 `AttributeError: Polygon object has no attribute 'lines'` (or `AttributeError: Polygon object has no attribute 'get_lines'`).
+
+### 【Manim Code Generation Rule: Correct Usage of `aligned_edge` in `Mobject.arrange()`】
+
+1.  **Problem Description:**
+    Using `aligned_edge=CENTER` within the `Mobject.arrange()` or `VGroup.arrange()` method (e.g., `my_group.arrange(DOWN, aligned_edge=CENTER)`) triggers a `NameError: name 'CENTER' is not defined`.
+
+2.  **Reason:**
+    The `aligned_edge` parameter in the `arrange` method expects a direction vector (like `UP`, `DOWN`, `LEFT`, `RIGHT`) or the constant `ORIGIN` (representing the point `[0,0,0]`) to specify the edge or point along which the Mobjects should be aligned. `CENTER` is not a predefined constant in Manim's standard namespace for this specific parameter, leading to the `NameError`.
+
+3.  **Correct Practice (Must Follow):**
+    *   To align the centers of Mobjects when arranging them (e.g., horizontally centering items arranged vertically, or vertically centering items arranged horizontally), you **must** use `aligned_edge=ORIGIN`.
+    *   When arranging vertically (`arrange(DOWN, ...)`), `aligned_edge=ORIGIN` aligns the horizontal centers.
+    *   When arranging horizontally (`arrange(RIGHT, ...)`), the default behavior is usually vertical center alignment, so `aligned_edge` might not be needed. If specified for clarity or other alignment, use `UP`, `DOWN`, `LEFT`, `RIGHT`, or `ORIGIN`.
+    *   **Absolutely forbid** using `aligned_edge=CENTER`.
+
+4.  **Code Example:**
+
+    ```python
+    from manim import VGroup, Square, Circle, DOWN, ORIGIN, LEFT # Necessary imports
+
+    # Example Mobjects
+    square = Square()
+    circle = Circle().scale(0.5)
+    triangle = Triangle().scale(0.7)
+
+    # --- Correct Usage ---
+    # Arrange vertically and align horizontal centers
+    v_group_correct = VGroup(square, circle, triangle)
+    v_group_correct.arrange(DOWN, buff=0.5, aligned_edge=ORIGIN) # Use ORIGIN
+
+    # Arrange horizontally (default is vertical center alignment)
+    h_group_default = VGroup(square.copy(), circle.copy(), triangle.copy())
+    h_group_default.arrange(RIGHT, buff=0.5) # No aligned_edge needed for center
+
+    # Arrange horizontally, explicitly aligning centers (less common, but valid)
+    h_group_explicit_center = VGroup(square.copy(), circle.copy(), triangle.copy())
+    h_group_explicit_center.arrange(RIGHT, buff=0.5, aligned_edge=ORIGIN) # Use ORIGIN
+
+    # Arrange vertically, aligning left edges
+    v_group_left = VGroup(square.copy(), circle.copy(), triangle.copy())
+    v_group_left.arrange(DOWN, buff=0.5, aligned_edge=LEFT) # Use LEFT
+
+
+    # --- Incorrect Usage (Causes NameError) ---
+    # v_group_incorrect = VGroup(square.copy(), circle.copy(), triangle.copy())
+    # try:
+    #     # Incorrect: Using CENTER
+    #     v_group_incorrect.arrange(DOWN, buff=0.5, aligned_edge=CENTER)
+    # except NameError as e:
+    #     print(f"Error expected: {e}")
+
+    # Example usage in a scene:
+    # self.play(Create(v_group_correct))
+    # self.play(Create(h_group_default.next_to(v_group_correct, RIGHT)))
+    # self.play(Create(v_group_left.next_to(h_group_default, RIGHT)))
+    ```
+
+### 【Manim Code Generation Rule: Use Defined Buffer Constants】
+
+1.  **Problem Description:**
+    Using a non-existent buffer constant like `XLARGE_BUFF` in positioning methods (e.g., `Mobject.next_to(..., buff=XLARGE_BUFF)`) triggers a `NameError: name 'XLARGE_BUFF' is not defined`.
+
+2.  **Reason:**
+    Manim's standard library defines specific buffer size constants: `SMALL_BUFF`, `MED_SMALL_BUFF`, `MED_LARGE_BUFF`, and `LARGE_BUFF`. Constants like `XLARGE_BUFF` are not predefined in the standard Manim namespace.
+
+3.  **Correct Practice (Must Follow):**
+    *   When specifying buffer sizes, you **must** use only the standard defined constants: `SMALL_BUFF`, `MED_SMALL_BUFF`, `MED_LARGE_BUFF`, `LARGE_BUFF`.
+    *   If a buffer size larger than `LARGE_BUFF` is required, or if a specific non-standard size is needed, you **must** use a direct numerical value (e.g., `buff=1.0`, `buff=1.5`, `buff=2.0`).
+    *   **Absolutely forbid** the use of undefined buffer constants like `XLARGE_BUFF`. Check the spelling and case of standard buffer constants carefully.
+
+4.  **Code Example:**
+
+    ```python
+    from manim import Square, Circle, RIGHT, LARGE_BUFF, MED_LARGE_BUFF # Necessary imports
+
+    # Example Mobjects
+    square = Square()
+    circle = Circle()
+
+    # --- Correct Usage ---
+    # Using a standard defined constant
+    circle.next_to(square, RIGHT, buff=LARGE_BUFF)
+
+    # Using a numerical value for a custom or larger buffer
+    triangle = Triangle().next_to(circle, RIGHT, buff=1.2) # Custom numerical buffer
+
+    # --- Incorrect Usage (Causes NameError) ---
+    # star = Star()
+    # try:
+    #     # Incorrect: Using an undefined constant
+    #     star.next_to(triangle, RIGHT, buff=XLARGE_BUFF)
+    # except NameError as e:
+    #     print(f"Error expected: {e}")
+
+    # Example usage in a scene:
+    # self.play(Create(square), Create(circle), Create(triangle))
+    ```
+
+### 【Manim Code Generation Rule: Correct Camera Manipulation Based on Scene Type】
+
+1.  **Problem Description:**
+    Attempting to access or manipulate `self.camera.frame` (e.g., `self.camera.frame.move_to(ORIGIN)`, `self.camera.frame.set(...)`) within a scene class that inherits directly from `manim.Scene` results in an `AttributeError: 'Camera' object has no attribute 'frame'`.
+
+2.  **Reason:**
+    The `self.camera.frame` object, which provides methods for controlling the camera's position, zoom, and orientation in 2D scenes, is primarily associated with the `MovingCameraScene` class. The base `Scene` class uses a simpler camera model that does not expose a manipulable `frame` attribute in the same way. Therefore, methods like `.move_to()` or `.set()` cannot be called on `self.camera.frame` in a standard `Scene`.
+
+3.  **Correct Practice (Must Follow):**
+    *   If the animation requires camera movements like panning, zooming, or tracking Mobjects (manipulations typically done via `self.camera.frame.animate...` or direct setting of `self.camera.frame` properties), the scene class **must** inherit from `MovingCameraScene`.
+    *   If the scene is intended to be static (no camera movement) or only involves basic fades, creations, and transformations of Mobjects without changing the camera's viewpoint, inheriting from `Scene` is appropriate. In this case, any code attempting to access or modify `self.camera.frame` (often found in reset or cleanup functions copied from `MovingCameraScene` examples) **must be removed or commented out**.
+    *   For 3D scenes requiring camera orientation changes, inherit from `ThreeDScene` and use methods like `self.set_camera_orientation()` and `self.move_camera()`. Do not use `self.camera.frame` for orientation in 3D.
+
+4.  **Code Example:**
+
+    ```python
+    from manim import Scene, MovingCameraScene, Square, Circle, Create, FadeOut, ORIGIN
+
+    # --- Correct Usage (MovingCameraScene) ---
+    class MyMovingCameraScene(MovingCameraScene):
+        def construct(self):
+            # Camera manipulation is allowed here
+            self.camera.frame.save_state()
+            square = Square()
+            self.play(Create(square))
+            self.play(self.camera.frame.animate.move_to(LEFT*2).scale(0.5))
+            self.wait(1)
+            self.play(Restore(self.camera.frame))
+
+        def clear_and_reset(self): # Example reset function
+            # ... (fade out mobjects) ...
+            self.clear()
+            # Correct: Can access self.camera.frame in MovingCameraScene
+            self.camera.frame.move_to(ORIGIN)
+            self.camera.frame.set(width=config.frame_width, height=config.frame_height)
+            self.wait(0.1)
+
+    # --- Correct Usage (Scene - No Camera Movement) ---
+    class MyStaticScene(Scene):
+        def construct(self):
+            # No camera frame manipulation here
+            circle = Circle()
+            self.play(Create(circle))
+            self.wait(1)
+            self.play(FadeOut(circle))
+
+        def clear_and_reset(self): # Example reset function
+            # ... (fade out mobjects) ...
+            self.clear()
+            # Correct: No attempt to access self.camera.frame in Scene
+            # self.camera.frame.move_to(ORIGIN) # <-- REMOVE/COMMENT OUT
+            # self.camera.frame.set(...)       # <-- REMOVE/COMMENT OUT
+            self.wait(0.1)
+    ```

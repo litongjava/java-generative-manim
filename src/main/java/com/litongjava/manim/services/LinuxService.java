@@ -1,5 +1,7 @@
 package com.litongjava.manim.services;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 import com.jfinal.kit.Kv;
@@ -16,6 +18,7 @@ import com.litongjava.openai.chat.ChatMessage;
 import com.litongjava.tio.core.ChannelContext;
 import com.litongjava.tio.core.Tio;
 import com.litongjava.tio.http.common.sse.SsePacket;
+import com.litongjava.tio.utils.hutool.FileUtil;
 import com.litongjava.tio.utils.hutool.StrUtil;
 import com.litongjava.tio.utils.json.FastJson2Utils;
 import com.litongjava.tio.utils.json.JsonUtils;
@@ -50,7 +53,7 @@ public class LinuxService {
    */
   public ProcessResult fixCodeAndRerun(final String topic, String md5, String code, String stdErr, List<ChatMessage> messages, GeminiChatRequestVo geminiChatRequestVo, ChannelContext channelContext) {
     // 初始错误日志和 SSE 提示
-    log.error("python 代码 第1次执行失败");
+    log.error("python 代码 第1次执行失败:{}", stdErr);
     if (channelContext != null) {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("progress", "Python code: 1st execution failed"));
       Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
@@ -108,7 +111,8 @@ public class LinuxService {
       }
 
       messages.add(new ChatMessage("model", code));
-      messages.add(new ChatMessage("user", "将这个问题写成提示词,防止你下次生成代码时再出现错误.我要添加到大模型的提示模板中,英文输出,不用输出代码,格式 ### 【Manim Code Generation Rule: title】 详情,错误信息"));
+      messages.add(new ChatMessage("user",
+          "将这个问题写成提示词,防止你下次生成代码时再出现错误.我要添加到大模型的提示模板中,英文输出,不用输出代码,格式 ### 【Manim Code Generation Rule: title】 1.Problem Description  2.Reason 3. Correct Practice (Must Follow) 4. Code Example"));
       geminiChatRequestVo.setChatMessages(messages);
 
       message = "start generate avoid prompt " + attempt;
@@ -155,7 +159,6 @@ public class LinuxService {
           byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", value));
           Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
         }
-
         log.info("生成成功:{}:", executeMainmCode.getOutput());
         return executeMainmCode;
       }
@@ -213,18 +216,18 @@ public class LinuxService {
 
     String generatedText = chatResponse.getCandidates().get(0).getContent().getParts().get(0).getText();
 
-    String json = null;
+    String code = null;
     int indexOf = generatedText.indexOf("```python");
-    int lastIndexOf = generatedText.lastIndexOf("```");
+
     if (indexOf == -1) {
       if (generatedText.startsWith("{") && generatedText.endsWith("}")) {
-        json = generatedText;
+        code = generatedText;
 
         ToolVo toolVo = null;
         try {
-          toolVo = JsonUtils.parse(json.trim(), ToolVo.class);
+          toolVo = JsonUtils.parse(code.trim(), ToolVo.class);
         } catch (Exception e) {
-          log.error("Failed to parse Json:{}", json);
+          log.error("Failed to parse Json:{}", code);
           return null;
         }
         return toolVo.getCode();
@@ -233,14 +236,32 @@ public class LinuxService {
         return null;
       }
     } else {
-      try {
-        json = generatedText.substring(indexOf + 9, lastIndexOf);
-      } catch (Exception e) {
-        log.error("generated text:{}", generatedText);
-        return null;
+      int lastIndexOf = generatedText.lastIndexOf("```");
+      log.info("index:{},{}", indexOf, lastIndexOf);
+      if (lastIndexOf > 9) {
+        try {
+          code = generatedText.substring(indexOf + 9, lastIndexOf);
+        } catch (Exception e) {
+          log.error("generated text:{}", generatedText, e);
+          return null;
+        }
+      } else {
+        try {
+          code = generatedText.substring(indexOf + 9);
+        } catch (Exception e) {
+          log.error("generated text:{}", generatedText, e);
+          return null;
+        }
       }
-
-      return json;
+      new File("script").mkdirs();
+      try {
+        String path = "script/" + SnowflakeIdUtils.id() + ".py";
+        log.info("code file:{}", path);
+        FileUtil.writeString(code, path, "UTF-8");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      return code;
     }
 
   }
