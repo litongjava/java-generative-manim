@@ -40,26 +40,31 @@ public class MainimService {
   private LinuxService linuxService = Aop.get(LinuxService.class);
   private String video_server_name = "https://manim.collegebot.ai";
 
-  public void index(ExplanationVo xplanationVo, ChannelContext channelContext) {
-    String user_id = xplanationVo.getUser_id();
-    String prompt = xplanationVo.getPrompt();
-    String language = xplanationVo.getLanguage();
+  public void index(ExplanationVo explanationVo, ChannelContext channelContext) {
+    String user_id = explanationVo.getUser_id();
+    String prompt = explanationVo.getPrompt();
+    String language = explanationVo.getLanguage();
     long start = SystemTimer.currTime;
-    String videoUrl = this.index(user_id, prompt, language, false, channelContext);
+    String videoUrl = this.index(explanationVo, false, channelContext);
     long end = SystemTimer.currTime;
     if (videoUrl != null) {
       Row row = Row.by("id", SnowflakeIdUtils.id()).set("video_url", videoUrl).set("title", prompt).set("language", language)
           //
-          .set("voice_id", xplanationVo.getVoice_id()).set("user_id", user_id).set("elapsed", (end - start));
+          .set("voice_id", explanationVo.getVoice_id()).set("user_id", user_id).set("elapsed", (end - start));
       Db.save("ef_ugvideo", row);
     }
   }
 
-  public String index(String userId, final String topic, String language, boolean isTelegram, ChannelContext channelContext) {
+  public String index(ExplanationVo xplanationVo, boolean isTelegram, ChannelContext channelContext) {
+    String topic = xplanationVo.getPrompt();
+    String language = xplanationVo.getLanguage();
+    String voice_provider = xplanationVo.getVoice_provider();
+    String voice_id = xplanationVo.getVoice_id();
+
     String md5 = Md5Utils.getMD5(topic);
 
-    String sql = "select video_url from ef_generate_code where md5=? and language=?";
-    String output = Db.queryStr(sql, md5, language);
+    String sql = "select video_url from ef_generate_code where md5=? and language=? and voice_provider=? and voice_id=?";
+    String output = Db.queryStr(sql, md5, language, voice_provider, voice_id);
 
     if (output != null) {
       log.info("hit cache ef_generate_code");
@@ -141,7 +146,7 @@ public class MainimService {
 
       Row row = Row.by("id", SnowflakeIdUtils.id());
       row.set("topic", topic).set("md5", md5);
-      row.set("video_url", output).set("language", language);
+      row.set("video_url", output).set("language", language).set("voice_provider", voice_provider).set("voice_id", voice_id);
       Db.save("ef_generate_code", row);
     }
     log.info("result:{}", output);

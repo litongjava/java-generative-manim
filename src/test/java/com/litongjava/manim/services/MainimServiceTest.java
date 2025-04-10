@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import com.litongjava.jfinal.aop.Aop;
 import com.litongjava.manim.config.AdminAppConfig;
+import com.litongjava.manim.vo.ExplanationVo;
 import com.litongjava.tio.boot.testing.TioBootTest;
 
 public class MainimServiceTest {
@@ -11,13 +12,15 @@ public class MainimServiceTest {
   @Test
   public void test() {
     TioBootTest.runWith(AdminAppConfig.class);
-    Aop.get(MainimService.class).index(null, "Chemistry - Kjeldahl Method", "English", false, null);
+    ExplanationVo explanationVo = new ExplanationVo("Chemistry - Kjeldahl Method");
+    Aop.get(MainimService.class).index(explanationVo, false, null);
   }
 
   @Test
   public void trigonometricFunctions() {
     TioBootTest.runWith(AdminAppConfig.class);
-    Aop.get(MainimService.class).index(null, "生成一个三角函数讲解视频", "Chinese", false, null);
+    ExplanationVo explanationVo = new ExplanationVo("生成一个三角函数讲解视频");
+    Aop.get(MainimService.class).index(explanationVo, false, null);
   }
 
   @Test
