@@ -91,7 +91,6 @@ public class MainimService {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", value));
       SsePacket ssePacket = new SsePacket("progress", jsonBytes);
       Tio.bSend(channelContext, ssePacket);
-      SseEmitter.closeSeeConnection(channelContext);
     }
 
     String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
