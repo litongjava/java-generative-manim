@@ -37,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class MainimService {
   private Striped<Lock> locks = Striped.lock(1024);
   private LinuxService linuxService = Aop.get(LinuxService.class);
+  private String video_server_name = "https://manim.collegebot.ai";
 
   public void index(ExplanationVo xplanationVo, ChannelContext channelContext) {
     String user_id = xplanationVo.getUser_id();
@@ -46,6 +47,17 @@ public class MainimService {
 
   public void index(String userId, final String topic, boolean isTelegram, ChannelContext channelContext) {
     String md5 = Md5Utils.getMD5(topic);
+
+    String sql = "select video_url from ef_generate_code where md5=?";
+    String output = Db.queryStr(sql);
+
+    if (output != null && channelContext != null) {
+      String url = video_server_name + output;
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
+      SsePacket ssePacket = new SsePacket("main", jsonBytes);
+      Tio.bSend(channelContext, ssePacket);
+      SseEmitter.closeSeeConnection(channelContext);
+    }
     String generatedText = genSence(topic, md5);
     if (channelContext != null) {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
@@ -91,17 +103,19 @@ public class MainimService {
       executeMainmCode = linuxService.fixCodeAndRerun(topic, md5, code, stdErr, messages, geminiChatRequestVo, channelContext);
     }
 
-    if (executeMainmCode != null && StrUtil.isNotBlank(executeMainmCode.getOutput())) {
-      String output = executeMainmCode.getOutput();
-      String url = "https://manim.collegebot.ai" + output;
+    if (executeMainmCode != null && StrUtil.isNotBlank(executeMainmCode.getOutput()) && channelContext != null) {
+      output = executeMainmCode.getOutput();
+      String url = video_server_name + output;
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
-      SsePacket ssePacket = new SsePacket(",main", jsonBytes);
+      SsePacket ssePacket = new SsePacket("main", jsonBytes);
       Tio.bSend(channelContext, ssePacket);
+
       Row row = Row.by("id", SnowflakeIdUtils.class);
       row.set("topic", topic).set("md5", md5);
-      row.set("url", url);
+      row.set("url", output);
       Db.save("ef_generate_code", row);
     }
+    log.info("result:{}", output);
     SseEmitter.closeSeeConnection(channelContext);
   }
 
