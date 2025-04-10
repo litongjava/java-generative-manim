@@ -13,8 +13,6 @@ import com.litongjava.db.activerecord.Row;
 import com.litongjava.gemini.GeminiChatRequestVo;
 import com.litongjava.gemini.GeminiChatResponseVo;
 import com.litongjava.gemini.GeminiClient;
-import com.litongjava.gemini.GeminiGenerationConfigVo;
-import com.litongjava.gemini.GeminiResponseSchema;
 import com.litongjava.gemini.GoogleGeminiModels;
 import com.litongjava.jfinal.aop.Aop;
 import com.litongjava.linux.ProcessResult;
@@ -32,7 +30,6 @@ import com.litongjava.tio.utils.hutool.StrUtil;
 import com.litongjava.tio.utils.json.FastJson2Utils;
 import com.litongjava.tio.utils.json.JsonUtils;
 import com.litongjava.tio.utils.snowflake.SnowflakeIdUtils;
-import com.litongjava.vo.ToolVo;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,7 +50,7 @@ public class MainimService {
     if (channelContext != null) {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
       SsePacket ssePacket = new SsePacket("sence", jsonBytes);
-      Tio.send(channelContext, ssePacket);
+      Tio.bSend(channelContext, ssePacket);
     }
 
     String prompt = getSystemPrompt();
@@ -62,43 +59,30 @@ public class MainimService {
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(new ChatMessage("user", sence));
 
-    GeminiGenerationConfigVo geminiGenerationConfigVo = new GeminiGenerationConfigVo();
-    //设置参数
-    GeminiResponseSchema pythonCode = GeminiResponseSchema.pythonCode();
-    geminiGenerationConfigVo.buildJsonValue().setResponseSchema(pythonCode);
-    geminiGenerationConfigVo.setTemperature(0d);
-
     //请求类
     GeminiChatRequestVo geminiChatRequestVo = new GeminiChatRequestVo();
     geminiChatRequestVo.setChatMessages(messages);
     geminiChatRequestVo.setSystemPrompt(prompt);
-    geminiChatRequestVo.setGenerationConfig(geminiGenerationConfigVo);
 
     log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
 
     String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
+    if (code == null) {
+      if (channelContext != null) {
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "Failed to generate python code"));
+        SsePacket ssePacket = new SsePacket("error", jsonBytes);
+        Tio.bSend(channelContext, ssePacket);
+        SseEmitter.closeSeeConnection(channelContext);
+      }
+    }
 
     if (channelContext != null) {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("python_code", code));
       SsePacket ssePacket = new SsePacket("python_code", jsonBytes);
-      Tio.send(channelContext, ssePacket);
+      Tio.bSend(channelContext, ssePacket);
     }
 
-    int indexOf = code.indexOf("```json");
-    if (indexOf == -1) {
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "No valid JSON data found in the output."));
-      SsePacket ssePacket = new SsePacket("error", jsonBytes);
-      Tio.send(channelContext, ssePacket);
-      log.error("No valid JSON data found in the output.:{}", code);
-      SseEmitter.closeSeeConnection(channelContext);
-      return;
-    }
-
-    String json = code.substring(indexOf + 7, code.length() - 3);
-    ToolVo toolVo = JsonUtils.parse(json, ToolVo.class);
-    code = toolVo.getCode();
-
-    log.info("code:{}", code);
+    //log.info("code:{}", code);
     ProcessResult executeMainmCode = linuxService.executeCode(code);
 
     String stdErr = executeMainmCode.getStdErr();
@@ -112,7 +96,7 @@ public class MainimService {
       String url = "https://manim.collegebot.ai" + output;
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
       SsePacket ssePacket = new SsePacket(",main", jsonBytes);
-      Tio.send(channelContext, ssePacket);
+      Tio.bSend(channelContext, ssePacket);
       Row row = Row.by("id", SnowflakeIdUtils.class);
       row.set("topic", topic).set("md5", md5);
       row.set("url", url);
