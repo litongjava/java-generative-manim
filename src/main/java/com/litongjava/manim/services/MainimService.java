@@ -185,6 +185,13 @@ public class MainimService {
     URL resource = ResourceUtil.getResource("prompts/gen_video_code_en.txt");
     StringBuilder stringBuffer = FileUtil.readURLAsString(resource);
 
+    String sql = "select prompt from ef_generate_code_avoid_error_prompt";
+    List<String> prompts = Db.queryListString(sql);
+    if (prompts != null && prompts.size() > 0) {
+      for (String string : prompts) {
+        stringBuffer.append(string).append("\r\n");
+      }
+    }
     URL code_example_01_url = ResourceUtil.getResource("prompts/code_example_01.txt");
     StringBuilder code_example_01 = FileUtil.readURLAsString(code_example_01_url);
 
