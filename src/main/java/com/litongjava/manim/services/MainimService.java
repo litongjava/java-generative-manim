@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.locks.Lock;
 
 import com.google.common.util.concurrent.Striped;
+import com.jfinal.kit.Kv;
 import com.jfinal.template.Template;
 import com.litongjava.db.activerecord.Db;
 import com.litongjava.db.activerecord.Row;
@@ -15,14 +16,20 @@ import com.litongjava.gemini.GeminiClient;
 import com.litongjava.gemini.GeminiGenerationConfigVo;
 import com.litongjava.gemini.GeminiResponseSchema;
 import com.litongjava.gemini.GoogleGeminiModels;
+import com.litongjava.jfinal.aop.Aop;
 import com.litongjava.linux.LinuxClient;
 import com.litongjava.linux.ProcessResult;
 import com.litongjava.openai.chat.ChatMessage;
 import com.litongjava.template.PromptEngine;
+import com.litongjava.tio.core.ChannelContext;
+import com.litongjava.tio.core.Tio;
+import com.litongjava.tio.http.common.sse.SsePacket;
+import com.litongjava.tio.http.server.util.SseEmitter;
 import com.litongjava.tio.utils.crypto.Md5Utils;
 import com.litongjava.tio.utils.hutool.FileUtil;
 import com.litongjava.tio.utils.hutool.ResourceUtil;
 import com.litongjava.tio.utils.hutool.StrUtil;
+import com.litongjava.tio.utils.json.FastJson2Utils;
 import com.litongjava.tio.utils.json.JsonUtils;
 import com.litongjava.tio.utils.snowflake.SnowflakeIdUtils;
 import com.litongjava.vo.ToolVo;
@@ -32,9 +39,39 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MainimService {
   private Striped<Lock> locks = Striped.lock(1024);
+  private LinuxService linuxService = Aop.get(LinuxService.class);
+  
+  public String genSence(String topic) {
+    return this.genSence(topic, Md5Utils.getMD5(topic));
+  }
+  
+  public String getSystemPrompt() {
+    // 生成代码
+    URL resource = ResourceUtil.getResource("prompts/gen_video_code_en.txt");
+    StringBuilder stringBuffer = FileUtil.readURLAsString(resource);
 
-  public void index(String userId, String text, boolean isTelegram) {
-    String generatedText = genSence(text);
+    URL code_example_01_url = ResourceUtil.getResource("prompts/code_example_01.txt");
+    StringBuilder code_example_01 = FileUtil.readURLAsString(code_example_01_url);
+
+    URL code_example_02_url = ResourceUtil.getResource("prompts/code_example_02.txt");
+    StringBuilder code_example_02 = FileUtil.readURLAsString(code_example_02_url);
+
+    URL code_example_03_url = ResourceUtil.getResource("prompts/code_example_03.txt");
+    StringBuilder code_example_03 = FileUtil.readURLAsString(code_example_03_url);
+
+    String prompt = stringBuffer.toString() + "\r\n## complete Python code example  \r\n" + "\r\n### Example 1  \r\n" + code_example_01 + "\r\n### Example 2  \r\n" + code_example_02
+        + "\r\n### Example 1  \r\n" + code_example_03;
+    return prompt;
+  }
+
+  public void index(String userId, final String topic, boolean isTelegram, ChannelContext channelContext) {
+    String md5 = Md5Utils.getMD5(topic);
+    String generatedText = genSence(topic, md5);
+    if (channelContext != null) {
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
+      SsePacket ssePacket = new SsePacket("sence", jsonBytes);
+      Tio.send(channelContext, ssePacket);
+    }
 
     String prompt = getSystemPrompt();
 
@@ -56,261 +93,53 @@ public class MainimService {
 
     log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
 
-    String code = genManaimCode(text, geminiChatRequestVo);
+    String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
+
+    if (channelContext != null) {
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("python_code", code));
+      SsePacket ssePacket = new SsePacket("python_code", jsonBytes);
+      Tio.send(channelContext, ssePacket);
+    }
 
     int indexOf = code.indexOf("```json");
     if (indexOf == -1) {
-      log.error("输出中没有找到有效的 JSON 数据:{}", code);
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "No valid JSON data found in the output."));
+      SsePacket ssePacket = new SsePacket("error", jsonBytes);
+      Tio.send(channelContext, ssePacket);
+      log.error("No valid JSON data found in the output.:{}", code);
+      SseEmitter.closeSeeConnection(channelContext);
       return;
     }
+
     String json = code.substring(indexOf + 7, code.length() - 3);
     ToolVo toolVo = JsonUtils.parse(json, ToolVo.class);
     code = toolVo.getCode();
+    
     log.info("code:{}", code);
-    ProcessResult executeMainmCode = executeCode(code);
+    ProcessResult executeMainmCode = linuxService.executeCode(code);
 
     String stdErr = executeMainmCode.getStdErr();
-    if (StrUtil.isNotBlank(stdErr)) {
-      log.error("python 第1次执行失败 error:{}", stdErr);
-      messages.add(new ChatMessage("model", code));
-      messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-      geminiChatRequestVo.setChatMessages(messages);
 
-      log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-      toolVo = genManimCode(text, geminiChatRequestVo);
-      if (toolVo == null) {
-        return;
-      }
-      code = toolVo.getCode();
-      log.info("code:{}", code);
-      executeMainmCode = executeCode(code);
-      stdErr = executeMainmCode.getStdErr();
-      if (StrUtil.isNotBlank(stdErr)) {
-        log.error("python 第2次执行失败 error:{}", stdErr);
-        messages.add(new ChatMessage("model", code));
-        messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-        geminiChatRequestVo.setChatMessages(messages);
-
-        log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-        toolVo = genManimCode(text, geminiChatRequestVo);
-        if (toolVo == null) {
-          return;
-        }
-        code = toolVo.getCode();
-        log.info("code:{}", code);
-        executeMainmCode = executeCode(code);
-
-        stdErr = executeMainmCode.getStdErr();
-        if (StrUtil.isNotBlank(stdErr)) {
-          log.error("python 第3次执行失败 error:{}", stdErr);
-          messages.add(new ChatMessage("model", code));
-          messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-          geminiChatRequestVo.setChatMessages(messages);
-
-          log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-          toolVo = genManimCode(text, geminiChatRequestVo);
-          if (toolVo == null) {
-            return;
-          }
-          code = toolVo.getCode();
-          log.info("code:{}", code);
-          executeMainmCode = executeCode(code);
-
-          stdErr = executeMainmCode.getStdErr();
-          if (StrUtil.isNotBlank(stdErr)) {
-            log.error("python 第4次执行失败 error:{}", stdErr);
-            messages.add(new ChatMessage("model", code));
-            messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-            geminiChatRequestVo.setChatMessages(messages);
-
-            log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-            toolVo = genManimCode(text, geminiChatRequestVo);
-            if (toolVo == null) {
-              return;
-            }
-            code = toolVo.getCode();
-            log.info("code:{}", code);
-            executeMainmCode = executeCode(code);
-
-            stdErr = executeMainmCode.getStdErr();
-            if (StrUtil.isNotBlank(stdErr)) {
-              log.error("python 第5次执行失败 error:{}", stdErr);
-              messages.add(new ChatMessage("model", code));
-              messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-              geminiChatRequestVo.setChatMessages(messages);
-
-              log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-              toolVo = genManimCode(text, geminiChatRequestVo);
-              if (toolVo == null) {
-                return;
-              }
-              code = toolVo.getCode();
-              log.info("code:{}", code);
-              executeMainmCode = executeCode(code);
-
-              stdErr = executeMainmCode.getStdErr();
-              if (StrUtil.isNotBlank(stdErr)) {
-                log.error("python 第6次执行失败 error:{}", stdErr);
-                messages.add(new ChatMessage("model", code));
-                messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-                geminiChatRequestVo.setChatMessages(messages);
-
-                log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-                toolVo = genManimCode(text, geminiChatRequestVo);
-                if (toolVo == null) {
-                  return;
-                }
-                code = toolVo.getCode();
-                log.info("code:{}", code);
-                executeMainmCode = executeCode(code);
-
-                stdErr = executeMainmCode.getStdErr();
-                if (StrUtil.isNotBlank(stdErr)) {
-                  log.error("python 第7次执行失败 error:{}", stdErr);
-                  messages.add(new ChatMessage("model", code));
-                  messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-                  geminiChatRequestVo.setChatMessages(messages);
-
-                  log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-                  toolVo = genManimCode(text, geminiChatRequestVo);
-                  if (toolVo == null) {
-                    return;
-                  }
-                  code = toolVo.getCode();
-                  log.info("code:{}", code);
-                  executeMainmCode = executeCode(code);
-
-                  stdErr = executeMainmCode.getStdErr();
-                  if (StrUtil.isNotBlank(stdErr)) {
-                    log.error("python 第8次执行失败 error:{}", stdErr);
-                    messages.add(new ChatMessage("model", code));
-                    messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-                    geminiChatRequestVo.setChatMessages(messages);
-
-                    log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-                    toolVo = genManimCode(text, geminiChatRequestVo);
-                    if (toolVo == null) {
-                      return;
-                    }
-                    code = toolVo.getCode();
-                    log.info("code:{}", code);
-                    executeMainmCode = executeCode(code);
-
-                    stdErr = executeMainmCode.getStdErr();
-                    if (StrUtil.isNotBlank(stdErr)) {
-                      log.error("python 第9次执行失败 error:{}", stdErr);
-                      messages.add(new ChatMessage("model", code));
-                      messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-                      geminiChatRequestVo.setChatMessages(messages);
-
-                      log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-                      toolVo = genManimCode(text, geminiChatRequestVo);
-                      if (toolVo == null) {
-                        return;
-                      }
-                      code = toolVo.getCode();
-                      log.info("code:{}", code);
-                      executeMainmCode = executeCode(code);
-
-                      stdErr = executeMainmCode.getStdErr();
-                      if (StrUtil.isNotBlank(stdErr)) {
-                        log.error("python 第10次执行失败 error:{}", stdErr);
-                        messages.add(new ChatMessage("model", code));
-                        messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
-                        geminiChatRequestVo.setChatMessages(messages);
-
-                        log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-
-                        toolVo = genManimCode(text, geminiChatRequestVo);
-                        if (toolVo == null) {
-                          return;
-                        }
-                        code = toolVo.getCode();
-                        log.info("code:{}", code);
-                        executeMainmCode = executeCode(code);
-
-                        stdErr = executeMainmCode.getStdErr();
-                        if (StrUtil.isNotBlank(stdErr)) {
-                          log.error("python 第11次执行失败 error:{}", stdErr);
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-        } else {
-          messages.add(new ChatMessage("model", code));
-          messages.add(new ChatMessage("user", "将这个问题写成提示词,防止你下次生成代时再出现这边错误.我要添加到大模型的提示的模板中,英文输出" + stdErr));
-          log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
-          String avoidPrompt = genManaimCode(text, geminiChatRequestVo);
-          System.out.println(avoidPrompt);
-        }
-      }
+    if (StrUtil.isBlank(executeMainmCode.getOutput())) {
+      executeMainmCode = linuxService.fixCodeAndRerun(topic, md5, code, stdErr, messages, geminiChatRequestVo, channelContext);
     }
-    log.info("json:{}", JsonUtils.toJson(executeMainmCode));
-  }
 
-  public String getSystemPrompt() {
-    // 生成代码
-    URL resource = ResourceUtil.getResource("prompts/gen_video_code_en.txt");
-    StringBuilder stringBuffer = FileUtil.readURLAsString(resource);
-
-    URL code_example_01_url = ResourceUtil.getResource("prompts/code_example_01.txt");
-    StringBuilder code_example_01 = FileUtil.readURLAsString(code_example_01_url);
-
-    URL code_example_02_url = ResourceUtil.getResource("prompts/code_example_02.txt");
-    StringBuilder code_example_02 = FileUtil.readURLAsString(code_example_02_url);
-
-    URL code_example_03_url = ResourceUtil.getResource("prompts/code_example_03.txt");
-    StringBuilder code_example_03 = FileUtil.readURLAsString(code_example_03_url);
-
-    String prompt = stringBuffer.toString() + "\r\n## complete Python code example  \r\n" + "\r\n### Example 1  \r\n" + code_example_01 + "\r\n### Example 2  \r\n" + code_example_02
-        + "\r\n### Example 1  \r\n" + code_example_03;
-    return prompt;
-  }
-
-  private ToolVo genManimCode(String text, GeminiChatRequestVo geminiChatRequestVo) {
-    String code;
-    int indexOf;
-    String json;
-    ToolVo toolVo;
-    code = genManaimCode(text, geminiChatRequestVo);
-
-    indexOf = code.indexOf("```json");
-    if (indexOf == -1) {
-      log.error("输出中没有找到有效的 JSON 数据:{}", code);
-      return null;
+    if (executeMainmCode != null && StrUtil.isNotBlank(executeMainmCode.getOutput())) {
+      String output = executeMainmCode.getOutput();
+      String url = "https://manim.collegebot.ai" + output;
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
+      SsePacket ssePacket = new SsePacket(",main", jsonBytes);
+      Tio.send(channelContext, ssePacket);
+      Row row = Row.by("id", SnowflakeIdUtils.class);
+      row.set("topic", topic).set("md5", md5);
+      row.set("url", url);
+      Db.save("ef_generate_code", row);
     }
-    json = code.substring(indexOf + 7, code.length() - 3);
-    toolVo = JsonUtils.parse(json, ToolVo.class);
-    return toolVo;
+    SseEmitter.closeSeeConnection(channelContext);
   }
+  
 
-  private ProcessResult executeCode(String code) {
-    String apiBase = "http://13.216.69.13";
-    ProcessResult executeMainmCode = LinuxClient.executeMainmCode(apiBase, "123456", code);
-    return executeMainmCode;
-  }
-
-  private String genManaimCode(String topic, GeminiChatRequestVo geminiChatRequestVo) {
-    GeminiChatResponseVo chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_EXP_03_25, geminiChatRequestVo);
-    String generatedText = chatResponse.getCandidates().get(0).getContent().getParts().get(0).getText();
-    return generatedText;
-  }
-
-  public String genSence(String text) {
-    String md5 = Md5Utils.getMD5(text);
+  public String genSence(String text, String md5) {
     String sql = "select sence_prompt from ef_generate_sence where md5=?";
     String generatedText = Db.queryStr(sql, md5);
     if (generatedText != null) {
@@ -346,4 +175,5 @@ public class MainimService {
     }
 
   }
+
 }
