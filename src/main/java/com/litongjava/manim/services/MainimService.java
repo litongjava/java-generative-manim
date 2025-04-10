@@ -49,25 +49,27 @@ public class MainimService {
     String md5 = Md5Utils.getMD5(topic);
 
     String sql = "select video_url from ef_generate_code where md5=?";
-    String output = Db.queryStr(sql);
+    String output = Db.queryStr(sql, md5);
 
     if (output != null && channelContext != null) {
       String url = video_server_name + output;
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
       SsePacket ssePacket = new SsePacket("main", jsonBytes);
       Tio.bSend(channelContext, ssePacket);
+      log.info("hit cache ef_generate_code");
       SseEmitter.closeSeeConnection(channelContext);
     }
-    String generatedText = genSence(topic, md5);
-    if (channelContext != null) {
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
-      SsePacket ssePacket = new SsePacket("sence", jsonBytes);
-      Tio.bSend(channelContext, ssePacket);
-    }
+    
+//    String generatedText = genSence(topic, md5);
+//    if (channelContext != null) {
+//      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
+//      SsePacket ssePacket = new SsePacket("sence", jsonBytes);
+//      Tio.bSend(channelContext, ssePacket);
+//    }
 
     String prompt = getSystemPrompt();
 
-    String sence = generatedText + "  \r\nThe generated subtitles and narration must use the language of this message.";
+    String sence = topic + "  \r\nThe generated subtitles and narration must use the language of this message.";
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(new ChatMessage("user", sence));
 
@@ -76,7 +78,7 @@ public class MainimService {
     geminiChatRequestVo.setChatMessages(messages);
     geminiChatRequestVo.setSystemPrompt(prompt);
 
-    log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
+    // log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
 
     String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
     if (code == null) {
@@ -175,7 +177,7 @@ public class MainimService {
     StringBuilder code_example_03 = FileUtil.readURLAsString(code_example_03_url);
 
     String prompt = stringBuffer.toString() + "\r\n## complete Python code example  \r\n" + "\r\n### Example 1  \r\n" + code_example_01 + "\r\n### Example 2  \r\n" + code_example_02
-        + "\r\n### Example 1  \r\n" + code_example_03;
+        + "\r\n### Example 3  \r\n" + code_example_03;
     return prompt;
   }
 }

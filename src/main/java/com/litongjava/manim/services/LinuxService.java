@@ -9,7 +9,6 @@ import com.litongjava.gemini.GeminiChatRequestVo;
 import com.litongjava.gemini.GeminiChatResponseVo;
 import com.litongjava.gemini.GeminiClient;
 import com.litongjava.gemini.GeminiGenerationConfigVo;
-import com.litongjava.gemini.GeminiResponseSchema;
 import com.litongjava.gemini.GoogleGeminiModels;
 import com.litongjava.linux.LinuxClient;
 import com.litongjava.linux.ProcessResult;
@@ -53,7 +52,7 @@ public class LinuxService {
     // 初始错误日志和 SSE 提示
     log.error("python 代码 第1次执行失败 error:{}", stdErr);
     if (channelContext != null) {
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "Python code: 1st execution failed"));
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("progress", "Python code: 1st execution failed"));
       Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
     }
 
@@ -72,7 +71,7 @@ public class LinuxService {
 
       //log.info("fix request {}: {}", attempt, JsonUtils.toSkipNullJson(geminiChatRequestVo));
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "strt fix code " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "start fix code " + attempt));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       code = genManaimCode(topic, md5, geminiChatRequestVo);
@@ -88,7 +87,7 @@ public class LinuxService {
 
       // 执行修复后的代码
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "strt run code " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "start run code " + attempt));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       executeMainmCode = executeCode(code);
@@ -144,7 +143,7 @@ public class LinuxService {
       log.error("python 第{}次执行失败 error:{}", attempt + 1, stdErr);
       if (channelContext != null) {
         byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "Python code: 第" + (attempt + 1) + "次执行失败"));
-        Tio.bSend(channelContext, new SsePacket("error", jsonBytes));
+        Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
     }
     // 若全部尝试后依然没有成功，就返回最后一次执行结果（可能输出为空）
@@ -179,8 +178,9 @@ public class LinuxService {
     GeminiChatResponseVo chatResponse = null;
     GeminiGenerationConfigVo geminiGenerationConfigVo = new GeminiGenerationConfigVo();
     //设置参数
-    GeminiResponseSchema pythonCodeSchema = GeminiResponseSchema.pythonCode();
-    geminiGenerationConfigVo.buildJsonValue().setResponseSchema(pythonCodeSchema);
+    //GeminiResponseSchema pythonCodeSchema = GeminiResponseSchema.pythonCode();
+    //geminiGenerationConfigVo.buildJsonValue().setResponseSchema(pythonCodeSchema);
+
     geminiGenerationConfigVo.setTemperature(0d);
     geminiChatRequestVo.setGenerationConfig(geminiGenerationConfigVo);
 
@@ -194,19 +194,28 @@ public class LinuxService {
     String generatedText = chatResponse.getCandidates().get(0).getContent().getParts().get(0).getText();
 
     String json = null;
-    int indexOf = generatedText.indexOf("```json");
+    int indexOf = generatedText.indexOf("```python");
+    int lastIndexOf = generatedText.lastIndexOf("```");
     if (indexOf == -1) {
       if (generatedText.startsWith("{") && generatedText.endsWith("}")) {
         json = generatedText;
+
+        ToolVo toolVo = null;
+        try {
+          toolVo = JsonUtils.parse(json.trim(), ToolVo.class);
+        } catch (Exception e) {
+          log.error("Failed to parse Json:{}", json);
+          return null;
+        }
+        return toolVo.getCode();
       } else {
         log.error("No valid JSON data found in the output.:{}", generatedText);
         return null;
       }
     } else {
-      json = generatedText.substring(indexOf + 7, generatedText.length() - 3);
+      json = generatedText.substring(indexOf + 9, lastIndexOf);
+      return json;
     }
 
-    ToolVo toolVo = JsonUtils.parse(json, ToolVo.class);
-    return toolVo.getCode();
   }
 }

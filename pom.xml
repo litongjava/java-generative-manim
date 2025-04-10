@@ -20,6 +20,12 @@
   </properties>
 
   <dependencies>
+
+    <dependency>
+      <groupId>com.litongjava</groupId>
+      <artifactId>tio-utils</artifactId>
+      <version>3.7.3.v20250501-RELEASE</version>
+    </dependency>
     <dependency>
       <groupId>com.litongjava</groupId>
       <artifactId>java-openai</artifactId>
@@ -32,11 +38,6 @@
       <version>1.0.0</version>
     </dependency>
 
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.4.12</version>
-    </dependency>
     <!-- Jackson Core 库，用于 JSON 处理 -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

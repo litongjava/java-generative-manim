@@ -5,7 +5,6 @@ import org.junit.Test;
 import com.litongjava.jfinal.aop.Aop;
 import com.litongjava.manim.config.AdminAppConfig;
 import com.litongjava.tio.boot.testing.TioBootTest;
-import com.litongjava.tio.utils.environment.EnvUtils;
 
 public class MainimServiceTest {
 
@@ -14,7 +13,13 @@ public class MainimServiceTest {
     TioBootTest.runWith(AdminAppConfig.class);
     Aop.get(MainimService.class).index(null, "什么是向量", false, null);
   }
-
+  
+  @Test
+  public void trigonometricFunctions() {
+    TioBootTest.runWith(AdminAppConfig.class);
+    Aop.get(MainimService.class).index(null, "生成一个三角函数讲解视频", false, null);
+  }
+  
   @Test
   public void getSystemPrompt() {
     String systemPrompt = Aop.get(MainimService.class).getSystemPrompt();
