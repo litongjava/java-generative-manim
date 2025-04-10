@@ -23,6 +23,7 @@ import com.litongjava.tio.core.ChannelContext;
 import com.litongjava.tio.core.Tio;
 import com.litongjava.tio.http.common.sse.SsePacket;
 import com.litongjava.tio.http.server.util.SseEmitter;
+import com.litongjava.tio.utils.SystemTimer;
 import com.litongjava.tio.utils.crypto.Md5Utils;
 import com.litongjava.tio.utils.hutool.FileUtil;
 import com.litongjava.tio.utils.hutool.ResourceUtil;
@@ -42,14 +43,23 @@ public class MainimService {
   public void index(ExplanationVo xplanationVo, ChannelContext channelContext) {
     String user_id = xplanationVo.getUser_id();
     String prompt = xplanationVo.getPrompt();
-    this.index(user_id, prompt, false, channelContext);
+    String language = xplanationVo.getLanguage();
+    long start = SystemTimer.currTime;
+    String videoUrl = this.index(user_id, prompt, language, false, channelContext);
+    long end = SystemTimer.currTime;
+    if (videoUrl != null) {
+      Row row = Row.by("id", SnowflakeIdUtils.id()).set("video_url", videoUrl).set("title", prompt).set("language", language)
+          //
+          .set("voice_id", xplanationVo.getVoice_id()).set("user_id", user_id).set("elapsed", (end - start));
+      Db.save("ef_ugvideo", row);
+    }
   }
 
-  public void index(String userId, final String topic, boolean isTelegram, ChannelContext channelContext) {
+  public String index(String userId, final String topic, String language, boolean isTelegram, ChannelContext channelContext) {
     String md5 = Md5Utils.getMD5(topic);
 
-    String sql = "select video_url from ef_generate_code where md5=?";
-    String output = Db.queryStr(sql, md5);
+    String sql = "select video_url from ef_generate_code where md5=? and language=?";
+    String output = Db.queryStr(sql, md5, language);
 
     if (output != null) {
       log.info("hit cache ef_generate_code");
@@ -60,7 +70,7 @@ public class MainimService {
         Tio.bSend(channelContext, ssePacket);
         SseEmitter.closeSeeConnection(channelContext);
       }
-      return;
+      return url;
 
     }
 
@@ -73,7 +83,7 @@ public class MainimService {
 
     String prompt = getSystemPrompt();
 
-    String sence = topic + "  \r\nThe generated subtitles and narration must use the language of this message.";
+    String sence = topic + "  \r\nThe generated subtitles and narration must use the " + language;
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(new ChatMessage("user", sence));
 
@@ -131,11 +141,12 @@ public class MainimService {
 
       Row row = Row.by("id", SnowflakeIdUtils.id());
       row.set("topic", topic).set("md5", md5);
-      row.set("video_url", output);
+      row.set("video_url", output).set("language", language);
       Db.save("ef_generate_code", row);
     }
     log.info("result:{}", output);
     SseEmitter.closeSeeConnection(channelContext);
+    return output;
   }
 
   public String genSence(String text, String md5) {

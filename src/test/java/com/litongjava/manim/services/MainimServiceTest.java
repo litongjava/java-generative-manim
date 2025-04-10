@@ -11,15 +11,15 @@ public class MainimServiceTest {
   @Test
   public void test() {
     TioBootTest.runWith(AdminAppConfig.class);
-    Aop.get(MainimService.class).index(null, "什么是向量", false, null);
+    Aop.get(MainimService.class).index(null, "Chemistry - Kjeldahl Method", "English", false, null);
   }
-  
+
   @Test
   public void trigonometricFunctions() {
     TioBootTest.runWith(AdminAppConfig.class);
-    Aop.get(MainimService.class).index(null, "生成一个三角函数讲解视频", false, null);
+    Aop.get(MainimService.class).index(null, "生成一个三角函数讲解视频", "Chinese", false, null);
   }
-  
+
   @Test
   public void getSystemPrompt() {
     String systemPrompt = Aop.get(MainimService.class).getSystemPrompt();
