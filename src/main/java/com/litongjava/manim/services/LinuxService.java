@@ -50,7 +50,7 @@ public class LinuxService {
    */
   public ProcessResult fixCodeAndRerun(final String topic, String md5, String code, String stdErr, List<ChatMessage> messages, GeminiChatRequestVo geminiChatRequestVo, ChannelContext channelContext) {
     // 初始错误日志和 SSE 提示
-    log.error("python 代码 第1次执行失败 error:{}", stdErr);
+    log.error("python 代码 第1次执行失败");
     if (channelContext != null) {
       byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("progress", "Python code: 1st execution failed"));
       Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
@@ -70,14 +70,18 @@ public class LinuxService {
       geminiChatRequestVo.setChatMessages(messages);
 
       //log.info("fix request {}: {}", attempt, JsonUtils.toSkipNullJson(geminiChatRequestVo));
+      String info = "start fix code " + attempt;
+      log.info(info);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "start fix code " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", info));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       code = genManaimCode(topic, md5, geminiChatRequestVo);
 
+      info = "finish fix code " + attempt;
+      log.info(info);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "finish fix code " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", info));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       if (code == null) {
@@ -86,15 +90,20 @@ public class LinuxService {
       //log.info("修复后的代码: {}", code);
 
       // 执行修复后的代码
+      String message = "start run code " + attempt;
+      log.info(message);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "start run code " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", info));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       executeMainmCode = executeCode(code);
       stdErr = executeMainmCode.getStdErr();
 
+      message = "run finished " + attempt;
+      log.info(message);
+
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "run finished " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
 
@@ -102,27 +111,36 @@ public class LinuxService {
       messages.add(new ChatMessage("user", "将这个问题写成提示词,防止你下次生成代码时再出现错误.我要添加到大模型的提示模板中,英文输出,不用输出代码,格式 ### 【Manim Code Generation Rule: title】 详情,错误信息"));
       geminiChatRequestVo.setChatMessages(messages);
 
+      message = "start generate avoid prompt " + attempt;
+      log.info(message);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "start generate avoid prompt " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       String avoidPrompt = genAvoidPromptCode(geminiChatRequestVo);
 
+      message = "finish generate avoid prompt " + attempt;
+      log.info(message);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "finish generate avoid prompt " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
 
+      message = "start save to ef_generate_code_avoid_error_prompt " + attempt;
+      log.info(message);
       String final_request_json = JsonUtils.toJson(geminiChatRequestVo);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "start save to ef_generate_code_avoid_error_prompt " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
+
       Row row2 = Row.by("id", SnowflakeIdUtils.id()).set("final_request_json", final_request_json).set("prompt", avoidPrompt);
       Db.save("ef_generate_code_avoid_error_prompt", row2);
 
+      message = "finish save to ef_generate_code_avoid_error_prompt " + attempt;
+      log.info(message);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "finish save to ef_generate_code_avoid_error_prompt " + attempt));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
 
@@ -131,8 +149,10 @@ public class LinuxService {
 
       // 如果代码执行有输出（即成功），则根据情况做额外处理（比如构造避免提示）后直接返回结果
       if (StrUtil.isNotBlank(executeMainmCode.getOutput())) {
+        String value = "success " + attempt;
+        log.info(value);
         if (channelContext != null) {
-          byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", "success " + attempt));
+          byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", value));
           Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
         }
 

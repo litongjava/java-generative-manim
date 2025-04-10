@@ -59,13 +59,13 @@ public class MainimService {
       log.info("hit cache ef_generate_code");
       SseEmitter.closeSeeConnection(channelContext);
     }
-    
-//    String generatedText = genSence(topic, md5);
-//    if (channelContext != null) {
-//      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
-//      SsePacket ssePacket = new SsePacket("sence", jsonBytes);
-//      Tio.bSend(channelContext, ssePacket);
-//    }
+
+    //    String generatedText = genSence(topic, md5);
+    //    if (channelContext != null) {
+    //      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("sence", generatedText));
+    //      SsePacket ssePacket = new SsePacket("sence", jsonBytes);
+    //      Tio.bSend(channelContext, ssePacket);
+    //    }
 
     String prompt = getSystemPrompt();
 
@@ -80,17 +80,22 @@ public class MainimService {
 
     // log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
 
+    String value = "Start generate python code";
+    log.info("value:{}", value);
+
     if (channelContext != null) {
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "Start generate python code"));
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", value));
       SsePacket ssePacket = new SsePacket("progress", jsonBytes);
       Tio.bSend(channelContext, ssePacket);
       SseEmitter.closeSeeConnection(channelContext);
     }
-    
+
     String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
     if (code == null) {
+      String info = "Failed to generate python code";
+      log.info(info);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "Failed to generate python code"));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", info));
         SsePacket ssePacket = new SsePacket("error", jsonBytes);
         Tio.bSend(channelContext, ssePacket);
         SseEmitter.closeSeeConnection(channelContext);
@@ -112,12 +117,14 @@ public class MainimService {
       executeMainmCode = linuxService.fixCodeAndRerun(topic, md5, code, stdErr, messages, geminiChatRequestVo, channelContext);
     }
 
-    if (executeMainmCode != null && StrUtil.isNotBlank(executeMainmCode.getOutput()) && channelContext != null) {
-      output = executeMainmCode.getOutput();
+    output = executeMainmCode.getOutput();
+    if (executeMainmCode != null && StrUtil.isNotBlank(output)) {
       String url = video_server_name + output;
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
-      SsePacket ssePacket = new SsePacket("main", jsonBytes);
-      Tio.bSend(channelContext, ssePacket);
+      if (channelContext != null) {
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
+        SsePacket ssePacket = new SsePacket("main", jsonBytes);
+        Tio.bSend(channelContext, ssePacket);
+      }
 
       Row row = Row.by("id", SnowflakeIdUtils.class);
       row.set("topic", topic).set("md5", md5);

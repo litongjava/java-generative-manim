@@ -1800,3 +1800,59 @@ Ensure that all generated TTS audio files are consistently saved into an `audio`
     *   For `Text` Mobjects containing potentially long sentences, descriptions, or multiple lines, **Must** set the `width` parameter during creation (e.g., `Text("...", width=config.frame_width / 2 - 1)`). This forces automatic line wrapping based on the specified width, preventing horizontal overflow. Choose a width appropriate for the intended layout region.
     *   When positioning text blocks next to other elements (like diagrams, axes, or other text blocks), **Must** use layout methods (`.next_to`, `.to_edge`, `.align_to`, `VGroup.arrange`) with sufficient `buff` values (e.g., `MED_LARGE_BUFF`, `LARGE_BUFF`, or numerical values like `0.8`, `1.0`) to ensure clear visual separation and prevent overlap.
     *   Structure the layout logically, often placing descriptive text in one region (e.g., left side using `to_edge(LEFT)`) and diagrams in another (e.g., right side or center).
+    
+
+### 【Manim Code Generation Rule: Handling Mixed Unicode Text and LaTeX Math in `MathTex`】
+
+**Details:** Directly embedding non-ASCII Unicode characters (e.g., Chinese, Japanese, Korean) within `MathTex` strings, even inside `\text{...}` commands, will cause LaTeX compilation errors. This is because Manim's default LaTeX setup does not automatically handle Unicode characters.
+
+**Correct Practice:**
+1.  **Separate:** Use `MathTex` strictly for the mathematical symbols, operators, and structures (like fractions, integrals).
+2.  **Use `Text`:** Use Manim's `Text` object for all parts containing Unicode characters (e.g., "对边", "斜边"). Ensure a suitable font supporting these characters is configured (see Font Checking rule).
+3.  **Combine and Position:** Create a `VGroup` to hold the `MathTex` structure (potentially using `\phantom` for spacing) and the separate `Text` objects. Manually position the `Text` objects relative to the `MathTex` structure (e.g., using `.move_to()` or `.next_to()`) to achieve the desired layout, such as placing text in the numerator or denominator of a fraction.
+
+**Error Message:** `ValueError: latex error converting to dvi. See log output above or the log file: ...` (Often accompanied by specific LaTeX errors like `! LaTeX Error: Unicode character ... not set up for use with LaTeX.`)
+
+
+### 【Manim Code Generation Rule: Correctly Position Text within `MathTex` Fractions Using Indexing】
+
+**Details:**
+When creating complex mathematical expressions by combining `MathTex` (for structure like fractions using `\phantom{...}` placeholders) and `Text` (for Unicode characters), attempting to locate the placeholder parts within the `MathTex` fraction using `MathTex.get_part_by_tex("placeholder_text", index=...)` is incorrect. The `get_part_by_tex` method (or its underlying `get_parts_by_tex`) does not accept an `index` keyword argument.
+
+To correctly position the `Text` objects (e.g., numerator, denominator) relative to the `MathTex` fraction structure:
+1.  Create the `MathTex` fraction object (e.g., `fraction_mob = MathTex(r"\frac{\phantom{Num}}{\phantom{Den}}")`).
+2.  Access the specific parts of the `MathTex` object (which behaves like a `VGroup`) using **direct indexing**. Typically, for a fraction:
+    *   `fraction_mob[0]` refers to the numerator part.
+    *   `fraction_mob[1]` refers to the denominator part.
+    *   `fraction_mob[2]` refers to the fraction line.
+3.  Use the center of the indexed part (e.g., `fraction_mob[0].get_center()`) to position the corresponding `Text` object using `.move_to()`.
+
+**Error Message:**
+`TypeError: MathTex.get_parts_by_tex() got an unexpected keyword argument 'index'` (or similar `TypeError` related to unexpected arguments in `get_part_by_tex`).
+
+### 【Manim Code Generation Rule: Avoid Direct Indexing for Complex `MathTex` Subparts (e.g., Fractions) When Combining with `Text`】
+
+**Details:**
+When creating mathematical expressions by combining `MathTex` (for structure like fractions using `\frac{\phantom{...}}{\phantom{...}}`) and `Text` (for Unicode characters), relying on direct indexing (e.g., `fraction_mob[0]`, `fraction_mob[1]`) to access the placeholder parts (numerator, denominator) within the `MathTex` object is unreliable and can lead to `IndexError`. The internal structure and indexing of sub-mobjects within a `MathTex` object generated from complex LaTeX (like fractions) are not guaranteed to be consistent or predictable.
+
+To robustly combine `Text` objects within a fraction structure:
+1.  Create the `Text` objects for the numerator and denominator separately.
+2.  Create a `Line` mobject to serve as the fraction bar. Adjust its width based on the maximum width of the numerator and denominator `Text` objects plus some padding.
+3.  Use `VGroup` and layout methods like `.next_to()` or `.arrange(DOWN, center=False, aligned_edge=CENTER)` to position the numerator `Text` above the `Line`, and the denominator `Text` below the `Line`. Ensure they are centered horizontally relative to the line.
+4.  Group the manually constructed fraction part (numerator `Text`, `Line`, denominator `Text`) and then arrange it with any preceding `MathTex` (e.g., `\sin(\theta) =`).
+
+**Error Message:**
+`IndexError: list index out of range` when attempting to access a subpart of a `MathTex` object using indexing (e.g., `fraction_mob[1]`) that does not exist or is not at the expected index.
+
+### 【Manim Code Generation Rule: Do Not Access `.lines` or `.get_lines()` on `Polygon` Objects】
+
+**Details:**
+Attempting to access an attribute named `lines` or call a method named `get_lines()` on a `Polygon` object (e.g., `my_polygon.get_lines()`) will result in an `AttributeError`. The `Polygon` class in Manim does not store its constituent line segments in a publicly accessible `lines` attribute or provide a `get_lines()` method.
+
+To reference or highlight a specific side of a `Polygon`:
+1.  **Store Vertices:** Keep track of the vertex coordinates used to create the `Polygon` (e.g., `A = [-1,0,0]`, `B = [1,0,0]`, `C = [0,1,0]`).
+2.  **Create `Line` Explicitly:** When you need to refer to a specific side, create a `Line` object directly using the two corresponding stored vertices (e.g., `side_AB = Line(A, B)`).
+3.  **Use the `Line`:** Use this newly created `Line` object for highlighting (e.g., `side_AB.copy().set_color(...)`) or other operations.
+
+**Error Message:**
+`AttributeError: Polygon object has no attribute 'lines'` (or `AttributeError: Polygon object has no attribute 'get_lines'`).
