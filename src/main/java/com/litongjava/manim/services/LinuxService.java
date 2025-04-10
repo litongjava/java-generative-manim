@@ -213,7 +213,13 @@ public class LinuxService {
         return null;
       }
     } else {
-      json = generatedText.substring(indexOf + 9, lastIndexOf);
+      try {
+        json = generatedText.substring(indexOf + 9, lastIndexOf);
+      } catch (Exception e) {
+        log.error("generated text:{}", generatedText);
+        return null;
+      }
+
       return json;
     }
 

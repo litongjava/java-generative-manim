@@ -80,6 +80,13 @@ public class MainimService {
 
     // log.info("request:{}", JsonUtils.toSkipNullJson(geminiChatRequestVo));
 
+    if (channelContext != null) {
+      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", "Start generate python code"));
+      SsePacket ssePacket = new SsePacket("progress", jsonBytes);
+      Tio.bSend(channelContext, ssePacket);
+      SseEmitter.closeSeeConnection(channelContext);
+    }
+    
     String code = linuxService.genManaimCode(topic, md5, geminiChatRequestVo);
     if (code == null) {
       if (channelContext != null) {
