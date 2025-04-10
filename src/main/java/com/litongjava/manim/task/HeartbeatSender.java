@@ -32,7 +32,7 @@ public class HeartbeatSender implements Runnable {
           SsePacket ssePacket = new SsePacket("heartbeat", jsonBytes);
 
           // Send the heartbeat packet to the client using the channel context
-          Tio.bSend(channelContext, ssePacket);
+          Tio.send(channelContext, ssePacket);
         }
       }
 

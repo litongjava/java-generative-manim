@@ -2122,3 +2122,119 @@ To reference or highlight a specific side of a `Polygon`:
     # except ValueError as e:
     #     print(f"Error expected: {e}") # Will likely raise ValueError: latex error...
     ```
+### 【Manim Code Generation Rule: Handling Missing SVG Files with `SVGMobject`】
+
+1.  **Problem Description:**
+    Code attempts to load an SVG file using `SVGMobject("filename.svg")`, but the specified file does not exist in the expected search paths (e.g., the script's directory, Manim's default asset directories), resulting in an `OSError: ... could not find filename.svg ...` during scene rendering.
+
+2.  **Reason:**
+    The `SVGMobject` class requires the SVG file specified in its constructor to be physically present and accessible at runtime. The error occurs because the file path is incorrect, the file is missing from the execution environment, or it hasn't been placed in a directory Manim automatically searches. Relying on external SVG files without ensuring their availability makes the generated code unreliable.
+
+3.  **Correct Practice (Must Follow):**
+    *   **Verify File Availability:** Before generating code that uses `SVGMobject("filename.svg")`, it must be confirmed that `filename.svg` is a standard Manim asset or will be reliably provided in the execution environment (e.g., in the same directory as the script or a designated `assets/` folder).
+    *   **Use Manim Shapes as Alternative:** For common or simple geometric shapes (like flasks, beakers, basic icons), **strongly prefer** constructing the visual element using Manim's native shape classes (`Circle`, `Rectangle`, `Polygon`, `Ellipse`, `Line`, `Arc`, `VGroup`, etc.). This eliminates the dependency on external files, making the code self-contained and robust.
+    *   **Prohibit Assumptions:** **Absolutely forbid** generating `SVGMobject` calls with arbitrary filenames (e.g., `"flask-solid.svg"`, `"icon.svg"`) based on assumptions. Only use `SVGMobject` when the existence and location of the specific SVG file are guaranteed.
+    *   **Error Handling (If Applicable):** In more complex scenarios (outside typical generation), one might wrap the `SVGMobject` call in a `try...except OSError` block to handle missing files gracefully, but for direct code generation, avoiding the issue is better.
+
+4.  **Code Example (Conceptual):**
+
+    *   **Incorrect (High Risk):**
+        ```python
+        # Assuming "flask-solid.svg" exists without confirmation
+        # flask_icon = SVGMobject("flask-solid.svg") # <-- Causes OSError if file is missing
+        # self.play(Create(flask_icon))
+        ```
+
+    *   **Correct (Using Manim Shapes - Preferred):**
+        ```python
+        # Creating a flask using Manim's shapes instead of SVG
+        flask_body = Ellipse(width=1.5, height=2.0, color=BLUE)
+        flask_neck = Rectangle(width=0.5, height=1.0, color=BLUE)
+        flask_neck.next_to(flask_body, UP, buff=-0.1)
+        flask_icon = VGroup(flask_body, flask_neck)
+        self.play(Create(flask_icon)) # <-- Works without external files
+        ```
+
+    *   **Correct (If SVG is Guaranteed):**
+        ```python
+        # Assuming "my_guaranteed_icon.svg" is placed correctly (e.g., in ./assets/)
+        # try:
+        #    icon = SVGMobject("assets/my_guaranteed_icon.svg")
+        #    self.play(Create(icon))
+        # except OSError:
+        #    print("Error: Could not find the required SVG file.")
+        #    # Handle the error, maybe display placeholder text
+        ```
+### 【Manim Code Generation Rule: Prevent `unicodeescape` Errors in LaTeX Strings】
+
+1.  **Problem Description:**
+    Using LaTeX commands containing backslashes (e.g., `\uparrow`, `\rightarrow`, `\alpha`) directly within regular Python string literals passed to `MathTex` or `Tex` (e.g., `MathTex("NH_3 \uparrow")`) can lead to a `SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes in position X-Y: truncated \uXXXX escape` (or similar `\x`, `\N` errors).
+
+2.  **Reason:**
+    Python interprets backslashes in regular string literals as the start of escape sequences. Sequences like `\u`, `\x`, `\N`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` have special meaning to Python. When a backslash intended for LaTeX (like in `\uparrow`) happens to form part of a sequence Python tries to interpret (like `\u` followed by `p`), but the sequence is invalid according to Python's rules, a `SyntaxError` occurs during Python parsing, before Manim even attempts to process the string with LaTeX.
+
+3.  **Correct Practice (Must Follow):**
+    *   Whenever a string literal passed to `MathTex`, `Tex`, or any function that will eventually process the string with LaTeX contains backslash sequences intended *for LaTeX*, you **must** define that string as a **raw string** by prefixing it with `r`.
+    *   Example: Use `r"\uparrow"` instead of `"\uparrow"`.
+    *   This tells Python to treat the backslashes within the string literally, passing the intended sequence (e.g., `\uparrow`) directly to Manim and subsequently to the LaTeX compiler, thus avoiding the Python `SyntaxError`.
+
+4.  **Code Example:**
+
+    ```python
+    # --- Incorrect Usage (Causes SyntaxError) ---
+    # try:
+    #     # Python tries to interpret \u in "\uparrow"
+    #     incorrect_tex = MathTex("NH_3 \uparrow", font_size=28)
+    # except SyntaxError as e:
+    #     print(f"Error expected: {e}")
+
+    # --- Correct Usage ---
+    # Use raw string r"..." to pass backslashes literally to LaTeX
+    correct_tex = MathTex(r"NH_3 \uparrow", font_size=28, color=MY_CHEM_ORANGE)
+    arrow_tex = MathTex(r"\longrightarrow", font_size=28) # Also use raw string
+
+    # Example usage in a scene:
+    # self.play(Write(correct_tex))
+    # self.play(Write(arrow_tex))
+    ```
+### 【Manim Code Generation Rule: Correctly Removing Grouped Mobjects from Scene】
+
+1.  **Problem Description:**
+    Attempting to call the `.clear()` method directly on a `VGroup` instance (e.g., `my_vgroup.clear()`) results in an `AttributeError: 'VGroup' object has no attribute 'clear'`.
+
+2.  **Reason:**
+    The `VGroup` class in Manim acts as a container to logically group Mobjects together for collective transformations or animations. It does not possess a `.clear()` method. The concept of "clearing" in Manim typically refers to removing Mobjects from the *scene's* display list (`self.mobjects`), not emptying the `VGroup` container itself.
+
+3.  **Correct Practice (Must Follow):**
+    *   To remove all Mobjects contained within a `VGroup` from the scene, you **must** pass the `VGroup` instance itself (or its unpacked contents using `*`) to a removal animation like `FadeOut` or `Uncreate`, or directly to `self.remove()`.
+    *   **Do not** attempt to call `.clear()` on the `VGroup` object.
+    *   If the goal is simply to stop displaying the grouped elements, use `self.play(FadeOut(my_vgroup))` or `self.remove(my_vgroup)`. The `VGroup` variable itself will still exist in Python's scope, but its constituent Mobjects will no longer be rendered by the scene.
+
+4.  **Code Example:**
+
+    ```python
+    # Assume 'scene' is an instance of a Manim Scene class
+    # Assume section_elements is a VGroup containing Mobjects already added to the scene
+
+    # --- Incorrect Usage (Causes AttributeError) ---
+    # try:
+    #     section_elements.clear() # VGroup has no 'clear' method
+    # except AttributeError as e:
+    #     print(f"Error: {e}")
+
+    # --- Correct Usage ---
+    # Method 1: Fade out the entire group
+    scene.play(FadeOut(section_elements), run_time=0.75)
+
+    # Method 2: Remove the group instantly (no animation)
+    # scene.remove(section_elements)
+
+    # Method 3 (Less common for groups, more for lists): Fade out individual elements
+    # valid_elements = [elem for elem in section_elements if elem is not None]
+    # if valid_elements:
+    #    scene.play(FadeOut(Group(*valid_elements)), run_time=0.75) # Create temporary Group for animation
+
+    # After fading out or removing, the 'section_elements' variable still exists,
+    # but the Mobjects it contains are no longer part of the scene's rendering list.
+    # You can re-add them later if needed, or let the variable go out of scope.
+    ```

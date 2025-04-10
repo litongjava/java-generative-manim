@@ -181,7 +181,7 @@ public class LinuxService {
     geminiChatRequestVo.setGenerationConfig(geminiGenerationConfigVo);
 
     try {
-      chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_EXP_03_25, geminiChatRequestVo);
+      chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_PREVIEW_03_25, geminiChatRequestVo);
     } catch (Exception e) {
       log.error("Faile to generate code", e);
       return null;
@@ -208,9 +208,10 @@ public class LinuxService {
     geminiChatRequestVo.setGenerationConfig(geminiGenerationConfigVo);
 
     try {
-      chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_EXP_03_25, geminiChatRequestVo);
+      //chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_EXP_03_25, geminiChatRequestVo);
+      chatResponse = GeminiClient.generate(GoogleGeminiModels.GEMINI_2_5_PRO_PREVIEW_03_25, geminiChatRequestVo);
     } catch (Exception e) {
-      log.error("Faile to generate code", e);
+      log.error("Faile to generate code:{}", JsonUtils.toJson(geminiChatRequestVo), e);
       return null;
     }
 
