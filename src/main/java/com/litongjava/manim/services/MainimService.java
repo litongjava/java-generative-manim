@@ -17,7 +17,6 @@ import com.litongjava.gemini.GeminiGenerationConfigVo;
 import com.litongjava.gemini.GeminiResponseSchema;
 import com.litongjava.gemini.GoogleGeminiModels;
 import com.litongjava.jfinal.aop.Aop;
-import com.litongjava.linux.LinuxClient;
 import com.litongjava.linux.ProcessResult;
 import com.litongjava.openai.chat.ChatMessage;
 import com.litongjava.template.PromptEngine;
