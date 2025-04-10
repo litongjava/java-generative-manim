@@ -51,13 +51,17 @@ public class MainimService {
     String sql = "select video_url from ef_generate_code where md5=?";
     String output = Db.queryStr(sql, md5);
 
-    if (output != null && channelContext != null) {
-      String url = video_server_name + output;
-      byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
-      SsePacket ssePacket = new SsePacket("main", jsonBytes);
-      Tio.bSend(channelContext, ssePacket);
+    if (output != null) {
       log.info("hit cache ef_generate_code");
-      SseEmitter.closeSeeConnection(channelContext);
+      String url = video_server_name + output;
+      if (channelContext != null) {
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("url", url));
+        SsePacket ssePacket = new SsePacket("main", jsonBytes);
+        Tio.bSend(channelContext, ssePacket);
+        SseEmitter.closeSeeConnection(channelContext);
+      }
+      return;
+
     }
 
     //    String generatedText = genSence(topic, md5);
@@ -126,9 +130,9 @@ public class MainimService {
         Tio.bSend(channelContext, ssePacket);
       }
 
-      Row row = Row.by("id", SnowflakeIdUtils.class);
+      Row row = Row.by("id", SnowflakeIdUtils.id());
       row.set("topic", topic).set("md5", md5);
-      row.set("url", output);
+      row.set("video_url", output);
       Db.save("ef_generate_code", row);
     }
     log.info("result:{}", output);

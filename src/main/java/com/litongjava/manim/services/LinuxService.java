@@ -64,8 +64,8 @@ public class LinuxService {
     // 用于记录每次调用生成修复代码后的返回结果
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       //保存错误日志
-      Row row = Row.by("id", SnowflakeIdUtils.id()).set("topic", topic).set("md5", md5).set("python_code", code).set("error", stdErr);
-      Db.save("ef_generate_error_code", row);
+      //Row row = Row.by("id", SnowflakeIdUtils.id()).set("topic", topic).set("md5", md5).set("python_code", code).set("error", stdErr);
+      //Db.save("ef_generate_error_code", row);
 
       // 构造用户请求消息
       messages.add(new ChatMessage("model", code));

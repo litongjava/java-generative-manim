@@ -1801,19 +1801,6 @@ Ensure that all generated TTS audio files are consistently saved into an `audio`
     *   When positioning text blocks next to other elements (like diagrams, axes, or other text blocks), **Must** use layout methods (`.next_to`, `.to_edge`, `.align_to`, `VGroup.arrange`) with sufficient `buff` values (e.g., `MED_LARGE_BUFF`, `LARGE_BUFF`, or numerical values like `0.8`, `1.0`) to ensure clear visual separation and prevent overlap.
     *   Structure the layout logically, often placing descriptive text in one region (e.g., left side using `to_edge(LEFT)`) and diagrams in another (e.g., right side or center).
     
-
-### 【Manim Code Generation Rule: Handling Mixed Unicode Text and LaTeX Math in `MathTex`】
-
-**Details:** Directly embedding non-ASCII Unicode characters (e.g., Chinese, Japanese, Korean) within `MathTex` strings, even inside `\text{...}` commands, will cause LaTeX compilation errors. This is because Manim's default LaTeX setup does not automatically handle Unicode characters.
-
-**Correct Practice:**
-1.  **Separate:** Use `MathTex` strictly for the mathematical symbols, operators, and structures (like fractions, integrals).
-2.  **Use `Text`:** Use Manim's `Text` object for all parts containing Unicode characters (e.g., "对边", "斜边"). Ensure a suitable font supporting these characters is configured (see Font Checking rule).
-3.  **Combine and Position:** Create a `VGroup` to hold the `MathTex` structure (potentially using `\phantom` for spacing) and the separate `Text` objects. Manually position the `Text` objects relative to the `MathTex` structure (e.g., using `.move_to()` or `.next_to()`) to achieve the desired layout, such as placing text in the numerator or denominator of a fraction.
-
-**Error Message:** `ValueError: latex error converting to dvi. See log output above or the log file: ...` (Often accompanied by specific LaTeX errors like `! LaTeX Error: Unicode character ... not set up for use with LaTeX.`)
-
-
 ### 【Manim Code Generation Rule: Correctly Position Text within `MathTex` Fractions Using Indexing】
 
 **Details:**
@@ -1897,20 +1884,6 @@ To reference or highlight a specific side of a `Polygon`:
     # Arrange vertically, aligning left edges
     v_group_left = VGroup(square.copy(), circle.copy(), triangle.copy())
     v_group_left.arrange(DOWN, buff=0.5, aligned_edge=LEFT) # Use LEFT
-
-
-    # --- Incorrect Usage (Causes NameError) ---
-    # v_group_incorrect = VGroup(square.copy(), circle.copy(), triangle.copy())
-    # try:
-    #     # Incorrect: Using CENTER
-    #     v_group_incorrect.arrange(DOWN, buff=0.5, aligned_edge=CENTER)
-    # except NameError as e:
-    #     print(f"Error expected: {e}")
-
-    # Example usage in a scene:
-    # self.play(Create(v_group_correct))
-    # self.play(Create(h_group_default.next_to(v_group_correct, RIGHT)))
-    # self.play(Create(v_group_left.next_to(h_group_default, RIGHT)))
     ```
 
 ### 【Manim Code Generation Rule: Use Defined Buffer Constants】
@@ -2007,4 +1980,145 @@ To reference or highlight a specific side of a `Polygon`:
             # self.camera.frame.move_to(ORIGIN) # <-- REMOVE/COMMENT OUT
             # self.camera.frame.set(...)       # <-- REMOVE/COMMENT OUT
             self.wait(0.1)
+    ```
+    
+### 【Manim Code Generation Rule: Handling Mixed Unicode Text and LaTeX Math in `MathTex`】
+
+1.  **Problem Description:**
+    Directly including non-ASCII Unicode characters (e.g., Chinese, Japanese, Korean) within `MathTex` strings, even inside `\text{...}` commands (like `MathTex(r"\frac{\text{对边}}{\text{斜边}}")`), leads to `ValueError: latex error converting to dvi` or similar LaTeX compilation errors (e.g., `LaTeX Error: Unicode character ...`).
+
+2.  **Reason:**
+    `MathTex` relies on a LaTeX backend for rendering. Standard LaTeX configurations, including Manim's default, often do not support direct Unicode character input unless specific packages (like `ctex` for Chinese) and configurations (like using XeLaTeX) are explicitly set up in the TeX template. The `\text{...}` command still uses the standard LaTeX text engine, which fails with Unicode without this setup. This differs from Manim's `Text` object, which uses the Pango rendering engine for robust Unicode handling.
+
+3.  **Correct Practice (Must Follow):**
+    When a mathematical expression needs to contain both standard LaTeX math and non-ASCII Unicode text:
+    *   **Isolate LaTeX Parts:** Use `MathTex` strictly for the purely mathematical symbols, operators, variables, and structures (like `=`).
+    *   **Isolate Unicode Text:** Use Manim's `Text` object for *all* parts containing Unicode characters (e.g., "对边", "斜边"). Ensure a suitable font supporting these characters is configured (see Font Checking rule).
+    *   **Combine Manually:** Construct the final expression by combining the `MathTex` and `Text` objects using `VGroup`.
+    *   **Manual Layout:** Use layout methods like `.arrange(RIGHT, ...)` or `.next_to()` to position the `Text` and `MathTex` elements correctly relative to each other. For structures like fractions, manually create the fraction using `Text` objects for the numerator/denominator and a `Line` object for the fraction bar, then group and arrange them (as shown in the `create_fraction_with_text` helper function example). **Do not** attempt to embed the `Text` objects directly into the `MathTex` string using `\text{}`.
+
+4.  **Code Example:**
+    ```python
+    from manim import Text, MathTex, VGroup, Line, LEFT, RIGHT, DOWN, ORIGIN # Necessary imports
+
+    # Define colors (example)
+    MY_WHITE = "#FFFFFF"
+    MY_SINE_COLOR = "#2AA198"
+    MY_OPPOSITE_COLOR = "#2AA198" # Example color for side
+    MY_HYPOTENUSE_COLOR = "#6C71C4" # Example color for side
+
+    # Helper function (Recommended for repeated use)
+    def create_fraction_with_text(numerator_text, denominator_text, line_color=MY_WHITE, text_color=MY_WHITE, font_size=36):
+        """Creates a VGroup representing a fraction with Text objects."""
+        num = Text(numerator_text, font_size=font_size, color=text_color)
+        den = Text(denominator_text, font_size=font_size, color=text_color)
+        max_width = max(num.width, den.width)
+        line_width_buffer = 0.1 # Optional buffer for line width
+        line = Line(
+            start=LEFT * (max_width / 2 + line_width_buffer),
+            end=RIGHT * (max_width / 2 + line_width_buffer),
+            color=line_color,
+            stroke_width=2
+        )
+        # Use ORIGIN for center alignment when arranging vertically
+        fraction_group = VGroup(num, line, den).arrange(DOWN, buff=SMALL_BUFF * 1.5, aligned_edge=ORIGIN)
+        return fraction_group
+
+    # --- Correct Usage Example within a Scene ---
+    # Assume final_font is set for Chinese if needed
+    # Text.set_default(font=final_font)
+
+    # Create the parts separately
+    sin_prefix = MathTex(r"\sin(\theta) = ", font_size=40, color=MY_SINE_COLOR)
+    # Use the helper function for the fraction part with Chinese text
+    sin_fraction_text = create_fraction_with_text("对边", "斜边", text_color=MY_WHITE, font_size=32)
+    # Optionally color the text parts
+    sin_fraction_text[0].set_color(MY_OPPOSITE_COLOR) # Numerator (Opposite)
+    sin_fraction_text[2].set_color(MY_HYPOTENUSE_COLOR) # Denominator (Hypotenuse)
+
+    # Combine the MathTex prefix and the Text-based fraction
+    calc_sin = VGroup(sin_prefix, sin_fraction_text).arrange(RIGHT, buff=MED_SMALL_BUFF)
+
+    # Add a numerical part (using MathTex)
+    calc_sin_suffix = MathTex(r"= \frac{3}{5}", font_size=40, color=MY_WHITE)
+    full_calculation = VGroup(calc_sin, calc_sin_suffix).arrange(RIGHT, buff=MED_SMALL_BUFF)
+
+    # Example animation
+    # self.play(Write(calc_sin[0]), Create(calc_sin[1]), Write(calc_sin_suffix))
+
+
+    # --- Incorrect Usage (Causes LaTeX Error) ---
+    # try:
+    #     # Incorrect: Embedding Chinese directly in MathTex using \text{}
+    #     calc_sin_error = MathTex(r"\sin(\theta) = \frac{\text{对边}}{\text{斜边}} = \frac{3}{5}", font_size=40, color=MY_WHITE)
+    #     self.play(Write(calc_sin_error))
+    # except ValueError as e:
+    #     print(f"Error expected: {e}") # Will likely raise ValueError: latex error...
+    ```
+### 【Manim Code Generation Rule: Handling Mixed Unicode Text and LaTeX Math in `MathTex`】
+
+1.  **Problem Description:**
+    Directly including non-ASCII Unicode characters (e.g., Chinese, Japanese, Korean) within `MathTex` strings, even inside `\text{...}` commands (like `MathTex(r"\frac{\text{对边}}{\text{斜边}}")`), leads to `ValueError: latex error converting to dvi` or similar LaTeX compilation errors (e.g., `LaTeX Error: Unicode character ...`).
+
+2.  **Reason:**
+    `MathTex` relies on a LaTeX backend for rendering. Standard LaTeX configurations, including Manim's default, often do not support direct Unicode character input unless specific packages (like `ctex` for Chinese) and configurations (like using XeLaTeX) are explicitly set up in the TeX template. The `\text{...}` command still uses the standard LaTeX text engine, which fails with Unicode without this setup. This differs from Manim's `Text` object, which uses the Pango rendering engine for robust Unicode handling.
+
+3.  **Correct Practice (Must Follow):**
+    When a mathematical expression needs to contain both standard LaTeX math and non-ASCII Unicode text:
+    *   **Isolate LaTeX Parts:** Use `MathTex` strictly for the purely mathematical symbols, operators, variables, and structures (like `=`).
+    *   **Isolate Unicode Text:** Use Manim's `Text` object for *all* parts containing Unicode characters (e.g., "对边", "斜边"). Ensure a suitable font supporting these characters is configured (see Font Checking rule).
+    *   **Combine Manually:** Construct the final expression by combining the `MathTex` and `Text` objects using `VGroup`.
+    *   **Manual Layout:** Use layout methods like `.arrange(RIGHT, ...)` or `.next_to()` to position the `Text` and `MathTex` elements correctly relative to each other. For structures like fractions, manually create the fraction using `Text` objects for the numerator/denominator and a `Line` object for the fraction bar, then group and arrange them (as shown in the `create_fraction_with_text` helper function example). **Do not** attempt to embed the `Text` objects directly into the `MathTex` string using `\text{}`.
+
+4.  **Code Example:**
+    ```python
+    # Assume necessary imports and color definitions
+    from manim import Text, MathTex, VGroup, Line, LEFT, RIGHT, DOWN, ORIGIN, Create, Write
+
+    # Helper function (Recommended for repeated use)
+    def create_fraction_with_text(numerator_text, denominator_text, line_color=MY_WHITE, text_color=MY_WHITE, font_size=36):
+        """Creates a VGroup representing a fraction with Text objects."""
+        num = Text(numerator_text, font_size=font_size, color=text_color)
+        den = Text(denominator_text, font_size=font_size, color=text_color)
+        max_width = max(num.width, den.width)
+        line_width_buffer = 0.1
+        line = Line(
+            start=LEFT * (max_width / 2 + line_width_buffer),
+            end=RIGHT * (max_width / 2 + line_width_buffer),
+            color=line_color,
+            stroke_width=2
+        )
+        fraction_group = VGroup(num, line, den).arrange(DOWN, buff=SMALL_BUFF * 1.5, aligned_edge=ORIGIN)
+        return fraction_group
+
+    # --- Correct Usage Example within a Scene ---
+    # Assume final_font is set for Chinese if needed
+    # Text.set_default(font=final_font)
+
+    # Create the parts separately
+    sin_prefix = MathTex(r"\sin(\theta) = ", font_size=40, color=MY_TEXT_COLOR)
+    # Use the helper function for the fraction part with Chinese text
+    sin_fraction_text = create_fraction_with_text("对边", "斜边", text_color=MY_TEXT_COLOR, font_size=32)
+    # Optionally color the text parts
+    # sin_fraction_text[0].set_color(MY_OPPOSITE_COLOR) # Numerator
+    # sin_fraction_text[2].set_color(MY_HYPOTENUSE_COLOR) # Denominator
+    sin_equals = MathTex(" = ", font_size=40, color=MY_TEXT_COLOR)
+    sin_value = MathTex(r"\frac{4}{5}", font_size=40, color=MY_SINE_COLOR)
+
+    # Combine the MathTex prefix, Text-based fraction, and value
+    calc_sin = VGroup(sin_prefix, sin_fraction_text, sin_equals, sin_value).arrange(RIGHT, buff=MED_SMALL_BUFF)
+
+    # Example animation
+    # self.play(Write(calc_sin[0]), Create(calc_sin[1]), Write(calc_sin[2]), Write(calc_sin[3]))
+
+
+    # --- Incorrect Usage (Causes LaTeX Error) ---
+    # try:
+    #     # Incorrect: Embedding Chinese directly in MathTex using \text{}
+    #     calc_sin_error_prefix = MathTex(r"\sin(\theta) = \frac{\text{对边}}{\text{斜边}} = ", font_size=40, color=MY_TEXT_COLOR)
+    #     calc_sin_error_value = MathTex(r"\frac{4}{5}", font_size=40, color=MY_SINE_COLOR)
+    #     calc_sin_error = VGroup(calc_sin_error_prefix, calc_sin_error_value).arrange(RIGHT)
+    #     self.play(Write(calc_sin_error))
+    # except ValueError as e:
+    #     print(f"Error expected: {e}") # Will likely raise ValueError: latex error...
     ```
