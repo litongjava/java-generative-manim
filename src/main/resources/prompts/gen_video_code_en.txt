@@ -1800,7 +1800,3 @@ Ensure that all generated TTS audio files are consistently saved into an `audio`
     *   For `Text` Mobjects containing potentially long sentences, descriptions, or multiple lines, **Must** set the `width` parameter during creation (e.g., `Text("...", width=config.frame_width / 2 - 1)`). This forces automatic line wrapping based on the specified width, preventing horizontal overflow. Choose a width appropriate for the intended layout region.
     *   When positioning text blocks next to other elements (like diagrams, axes, or other text blocks), **Must** use layout methods (`.next_to`, `.to_edge`, `.align_to`, `VGroup.arrange`) with sufficient `buff` values (e.g., `MED_LARGE_BUFF`, `LARGE_BUFF`, or numerical values like `0.8`, `1.0`) to ensure clear visual separation and prevent overlap.
     *   Structure the layout logically, often placing descriptive text in one region (e.g., left side using `to_edge(LEFT)`) and diagrams in another (e.g., right side or center).
-    
-## complete Python code example
-
-
