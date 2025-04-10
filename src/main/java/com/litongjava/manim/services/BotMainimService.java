@@ -16,7 +16,7 @@ public class BotMainimService {
     Long chatIdLong = chat.getId();
 
     try {
-      Aop.get(MainimService.class).index(chatIdLong.toString(), text, true);
+      Aop.get(MainimService.class).index(chatIdLong.toString(), text, true, null);
     } catch (Exception e) {
       log.error("Exception", e);
     }

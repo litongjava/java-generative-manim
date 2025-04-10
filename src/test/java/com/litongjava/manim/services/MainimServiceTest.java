@@ -11,7 +11,7 @@ public class MainimServiceTest {
 
   @Test
   public void test() {
-    EnvUtils.load();
+    TioBootTest.runWith(AdminAppConfig.class);
     Aop.get(MainimService.class).index(null, "什么是向量", false, null);
   }
 

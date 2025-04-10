@@ -18,6 +18,7 @@ import com.litongjava.gemini.GeminiResponseSchema;
 import com.litongjava.gemini.GoogleGeminiModels;
 import com.litongjava.jfinal.aop.Aop;
 import com.litongjava.linux.ProcessResult;
+import com.litongjava.manim.vo.ExplanationVo;
 import com.litongjava.openai.chat.ChatMessage;
 import com.litongjava.template.PromptEngine;
 import com.litongjava.tio.core.ChannelContext;
@@ -39,28 +40,11 @@ import lombok.extern.slf4j.Slf4j;
 public class MainimService {
   private Striped<Lock> locks = Striped.lock(1024);
   private LinuxService linuxService = Aop.get(LinuxService.class);
-  
-  public String genSence(String topic) {
-    return this.genSence(topic, Md5Utils.getMD5(topic));
-  }
-  
-  public String getSystemPrompt() {
-    // 生成代码
-    URL resource = ResourceUtil.getResource("prompts/gen_video_code_en.txt");
-    StringBuilder stringBuffer = FileUtil.readURLAsString(resource);
 
-    URL code_example_01_url = ResourceUtil.getResource("prompts/code_example_01.txt");
-    StringBuilder code_example_01 = FileUtil.readURLAsString(code_example_01_url);
-
-    URL code_example_02_url = ResourceUtil.getResource("prompts/code_example_02.txt");
-    StringBuilder code_example_02 = FileUtil.readURLAsString(code_example_02_url);
-
-    URL code_example_03_url = ResourceUtil.getResource("prompts/code_example_03.txt");
-    StringBuilder code_example_03 = FileUtil.readURLAsString(code_example_03_url);
-
-    String prompt = stringBuffer.toString() + "\r\n## complete Python code example  \r\n" + "\r\n### Example 1  \r\n" + code_example_01 + "\r\n### Example 2  \r\n" + code_example_02
-        + "\r\n### Example 1  \r\n" + code_example_03;
-    return prompt;
+  public void index(ExplanationVo xplanationVo, ChannelContext channelContext) {
+    String user_id = xplanationVo.getUser_id();
+    String prompt = xplanationVo.getPrompt();
+    this.index(user_id, prompt, false, channelContext);
   }
 
   public void index(String userId, final String topic, boolean isTelegram, ChannelContext channelContext) {
@@ -113,7 +97,7 @@ public class MainimService {
     String json = code.substring(indexOf + 7, code.length() - 3);
     ToolVo toolVo = JsonUtils.parse(json, ToolVo.class);
     code = toolVo.getCode();
-    
+
     log.info("code:{}", code);
     ProcessResult executeMainmCode = linuxService.executeCode(code);
 
@@ -136,7 +120,6 @@ public class MainimService {
     }
     SseEmitter.closeSeeConnection(channelContext);
   }
-  
 
   public String genSence(String text, String md5) {
     String sql = "select sence_prompt from ef_generate_sence where md5=?";
@@ -175,4 +158,26 @@ public class MainimService {
 
   }
 
+  public String genSence(String topic) {
+    return this.genSence(topic, Md5Utils.getMD5(topic));
+  }
+
+  public String getSystemPrompt() {
+    // 生成代码
+    URL resource = ResourceUtil.getResource("prompts/gen_video_code_en.txt");
+    StringBuilder stringBuffer = FileUtil.readURLAsString(resource);
+
+    URL code_example_01_url = ResourceUtil.getResource("prompts/code_example_01.txt");
+    StringBuilder code_example_01 = FileUtil.readURLAsString(code_example_01_url);
+
+    URL code_example_02_url = ResourceUtil.getResource("prompts/code_example_02.txt");
+    StringBuilder code_example_02 = FileUtil.readURLAsString(code_example_02_url);
+
+    URL code_example_03_url = ResourceUtil.getResource("prompts/code_example_03.txt");
+    StringBuilder code_example_03 = FileUtil.readURLAsString(code_example_03_url);
+
+    String prompt = stringBuffer.toString() + "\r\n## complete Python code example  \r\n" + "\r\n### Example 1  \r\n" + code_example_01 + "\r\n### Example 2  \r\n" + code_example_02
+        + "\r\n### Example 1  \r\n" + code_example_03;
+    return prompt;
+  }
 }
