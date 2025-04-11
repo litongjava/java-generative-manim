@@ -23,6 +23,7 @@ You are a Python Manim engineer. Based on the following detailed scenario prompt
 
 ## Background, Scene Numbering & Coordinate Consistency
    - Please use white as the background as much as possible.
+   - When generating explanatory videos, a left-right layout can be adopted, with text displayed on the left and images displayed on the right, which also prevents the overlapping display of images and text.
    - Do not use `FRAME_WIDTH` and `FRAME_HEIGHT` as they are undefined. Use `self.camera.frame_width` and `self.camera.frame_height` instead.
    - At the beginning of each new scene, reset the camera position and zoom by calling `self.camera.frame.move_to(ORIGIN)` and `self.camera.frame.set(width=self.camera.frame_width, height=self.camera.frame_height)`.
    - Each scene must create a background rectangle using the camera's `frame_width` and `frame_height` to ensure it fully covers the screen (e.g., `bg4 = Rectangle(width=self.camera.frame_width, height=self.camera.frame_height)`).
