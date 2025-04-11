@@ -2239,3 +2239,429 @@ To reference or highlight a specific side of a `Polygon`:
     # but the Mobjects it contains are no longer part of the scene's rendering list.
     # You can re-add them later if needed, or let the variable go out of scope.
     ```
+### 【Manim Code Generation Rule: Correct Usage of `set_color_by_tex` on `MathTex` Objects】
+
+1.  **Problem Description:**
+    Attempting to call the `Mobject.set_color_by_tex("tex_string", color)` method on a sub-mobject accessed via indexing from a `MathTex` object (e.g., `my_mathtex[0].set_color_by_tex("substring", RED)`) results in a `TypeError: Mobject.__getattr__.<locals>.setter() takes 2 positional arguments but 3 were given` or similar `AttributeError`.
+
+2.  **Reason:**
+    The `set_color_by_tex()` method is designed to operate on the *entire* `MathTex` object instance. It searches the internal structure derived from the original LaTeX string for the specified substring (`"tex_string"`) and applies the color. When you access a sub-mobject using indexing (e.g., `my_mathtex[0]`), you get only a part of the original structure. Calling `set_color_by_tex()` on this isolated part fails because the method is not intended for sub-mobjects and conflicts with their standard attribute handling.
+
+3.  **Correct Practice (Must Follow):**
+    *   To color specific parts of a `MathTex` object based on their TeX string representation, you **must** call `set_color_by_tex("tex_string", color)` directly on the **main, complete `MathTex` object** itself.
+    *   **Do not** attempt to call `set_color_by_tex()` on sub-mobjects obtained by indexing the `MathTex` object (e.g., `my_mathtex[index]`).
+
+4.  **Code Example (Conceptual):**
+    ```python
+    # Assume necessary imports and color definitions
+    from manim import MathTex, Write, RED, BLUE
+
+    # --- Correct Usage ---
+    # Create the full MathTex object
+    formula = MathTex("E", "=", "m", "c^2", color=WHITE)
+
+    # Correct: Call set_color_by_tex on the main 'formula' object
+    formula.set_color_by_tex("E", RED)
+    formula.set_color_by_tex("m", BLUE)
+    formula.set_color_by_tex("c^2", YELLOW)
+
+    # self.play(Write(formula)) # Animation works with colors applied
+
+
+    # --- Incorrect Usage (Causes TypeError) ---
+    # formula_incorrect = MathTex("E", "=", "m", "c^2", color=WHITE)
+    # try:
+    #     # Incorrect: Calling set_color_by_tex on an indexed sub-mobject
+    #     formula_incorrect[0].set_color_by_tex("E", RED) # Error!
+    #     formula_incorrect[2].set_color_by_tex("m", BLUE) # Error!
+    # except TypeError as e:
+    #     print(f"Error expected: {e}")
+    # # self.play(Write(formula_incorrect))
+    ```
+### 【Manim Code Generation Rule: Correctly Managing Shared Mobjects Across Scene Parts】
+
+1.  **Problem Description:**
+    An `IndexError: list index out of range` occurs when trying to access an element from a `VGroup` or list stored as an instance attribute (e.g., `self.shared_elements[index]`). This typically happens in a method representing a later part of the animation (e.g., `play_scene_02`) after a previous part (e.g., `play_scene_01`) added elements to the shared group, but the group is unexpectedly empty or smaller than expected at the point of access.
+
+2.  **Reason:**
+    The most common cause is the incorrect placement or execution of a scene clearing function (like `clear_and_reset()`). If `clear_and_reset()` is called *between* two scene parts, and the second part relies on Mobjects created and stored in the shared group by the first part, the clearing function will remove those Mobjects from the scene and likely reset the shared group variable (e.g., `self.shared_elements = VGroup()`). This leads to the `IndexError` when the second part attempts to access the now-missing elements from the emptied or reset group.
+
+3.  **Correct Practice (Must Follow):**
+    *   **Identify Dependencies:** Determine which Mobjects created in one scene part (method) are required as a base or reference for the next scene part.
+    *   **Strategic Clearing:** Only call the `clear_and_reset()` function (or similar cleanup logic) *after* all dependent parts have finished using the shared Mobjects. **Do not** call `clear_and_reset()` between two parts if the second part needs elements created by the first and stored in a shared instance variable that gets reset by the clearing function.
+    *   **Ensure Persistence:** If elements need to persist visually or as references across multiple logical parts *before* a final clear, ensure they are added to the scene and the shared group correctly in the first part, and that the clearing function is only called when those elements are no longer needed.
+    *   **Check Before Accessing (Defensive):** As a secondary measure, especially during debugging, you can add checks like `if self.shared_elements and len(self.shared_elements) > index:` before accessing `self.shared_elements[index]`. However, this often masks the underlying logic error in the placement of the clearing function. The primary fix should be correcting the clearing logic.
+
+4.  **Code Example (Conceptual):**
+    ```python
+    # Conceptual Example
+
+    class MyScene(Scene):
+        def setup(self):
+            # Shared group to hold elements needed across parts
+            self.diagram_elements = VGroup()
+            # ... other setup ...
+
+        def clear_and_reset(self):
+            # ... fades out self.mobjects ...
+            self.clear() # Removes mobjects from scene
+            # This line was the likely cause of the error if called too early:
+            self.diagram_elements = VGroup() # Resets the shared group
+            # ... reset camera etc. ...
+
+        def construct(self):
+            self.play_scene_01()
+            # INCORRECT PLACEMENT if scene 2 needs elements from scene 1's diagram_elements:
+            # self.clear_and_reset()
+
+            self.play_scene_02() # This would crash if clear_and_reset was called above
+
+            # CORRECT PLACEMENT: Call clear only after scene 2 is done
+            # if scene 3 is independent or scene 2 was the last part needing the elements.
+            self.clear_and_reset()
+
+            self.play_scene_03()
+            # ...
+
+        def play_scene_01(self):
+            # Creates element_A, element_B
+            element_A = Circle()
+            element_B = Square()
+            # Adds them to the shared group AND the scene
+            self.diagram_elements.add(element_A, element_B)
+            self.add(element_A, element_B) # Add to scene for display
+            self.play(Create(element_A), Create(element_B))
+            # ...
+
+        def play_scene_02(self):
+            # Needs element_A from scene 1, accessed via the shared group
+            if not self.diagram_elements: # Defensive check
+                 print("Error: diagram_elements is empty in Scene 2!")
+                 return
+            try:
+                # Accessing element_A (assuming it's the first element added in scene 1)
+                element_A_ref = self.diagram_elements[0] # <<< Potential IndexError if clear_and_reset was called prematurely
+                # Use element_A_ref for positioning or reference
+                new_element = Star().next_to(element_A_ref, RIGHT)
+                self.add(new_element) # Add new element to scene
+                self.play(Create(new_element))
+            except IndexError:
+                 print("IndexError in Scene 2: Likely caused by premature clearing of diagram_elements.")
+                 # Handle error gracefully or stop execution
+
+        def play_scene_03(self):
+            # Independent scene part, doesn't rely on diagram_elements
+            text = Text("Scene 3")
+            self.add(text)
+            self.play(Write(text))
+            # ...
+    ```
+### 【Manim Code Generation Rule: Defining Custom Color Variables】
+
+1.  **Problem Description:**
+    Attempting to use a variable name (e.g., `MY_RED`, `MY_CUSTOM_BLUE`) as a color value in a Mobject's constructor or method call results in a `NameError: name 'VARIABLE_NAME' is not defined`.
+
+2.  **Reason:**
+    This error occurs because the variable name used for the color was never assigned a value (typically a hexadecimal color string like `"#FF0000"`) before being referenced. Python requires all variables to be defined before they can be used. This often happens due to typos in the variable name, forgetting to define the color in the custom color section, or accidentally commenting out the definition.
+
+3.  **Correct Practice (Must Follow):**
+    *   Before using any custom variable name to represent a color, you **must** explicitly define it and assign it a valid color value (usually a hexadecimal string like `"#RRGGBB"` or potentially an RGB tuple/list if the context allows).
+    *   These definitions should typically be placed near the top of the script in a dedicated "Custom Colors" section for clarity and easy management.
+    *   Double-check the spelling of the variable name at the point of definition and where it is used to ensure they match exactly (case-sensitive).
+    *   Ensure the line defining the color variable is not commented out.
+
+4.  **Code Example:**
+
+    ```python
+    # --- Incorrect Usage (Causes NameError) ---
+    # try:
+    #     # MY_RED was never defined with a value like "#DC2626"
+    #     error_dot = Dot(color=MY_RED)
+    #     self.play(Create(error_dot))
+    # except NameError as e:
+    #     print(f"Error expected: {e}")
+
+    # --- Correct Usage ---
+    # Define the custom color variable FIRST
+    MY_RED = "#DC2626" # Example definition (replace with desired hex code)
+    MY_CUSTOM_BLUE = "#3498DB"
+    # Other necessary imports
+    from manim import Dot, Create
+
+    # Now the variable can be used
+    correct_dot = Dot(color=MY_RED)
+    another_dot = Dot(color=MY_CUSTOM_BLUE)
+    # self.play(Create(correct_dot), Create(another_dot)) # Example usage
+    ```
+### 【Manim Code Generation Rule: Importing Color Constants】
+
+1.  **Problem Description:**
+    Attempting to use a specific color constant (e.g., `BROWN`, `GOLD`, `PURPLE`, etc.) without importing it first results in a `NameError: name 'COLOR_NAME' is not defined`.
+
+2.  **Reason:**
+    While Manim predefines many common colors (like `RED`, `BLUE`, `GREEN`, `YELLOW`, `WHITE`, `BLACK`), less common named colors or colors from specific palettes (like SVG named colors) are not automatically loaded into the main namespace. They reside in specific color modules and must be explicitly imported before use.
+
+3.  **Correct Practice (Must Follow):**
+    *   Before using any named color constant other than the most basic ones (RED, BLUE, GREEN, YELLOW, WHITE, BLACK, GRAY, PINK, ORANGE, PURPLE, TEAL - check Manim's `constants.py` for the exact list automatically imported with `from manim import *`), you **must** explicitly import it from its corresponding module.
+    *   Commonly, named colors like `BROWN`, `GOLD`, `MAROON`, `NAVY`, etc., are found in `manim.utils.color.SVGNAMES`.
+    *   The import statement should be placed at the top of the Python script, e.g., `from manim.utils.color.SVGNAMES import BROWN`.
+    *   Always verify the correct module path for the desired color constant if unsure.
+
+4.  **Code Example:**
+
+    ```python
+    # --- Incorrect Usage (Causes NameError) ---
+    # try:
+    #     # Using BROWN without importing it
+    #     pencil = Line(LEFT, RIGHT, color=BROWN, stroke_width=8)
+    #     self.play(Create(pencil))
+    # except NameError as e:
+    #     print(f"Error expected: {e}")
+
+    # --- Correct Usage ---
+    # Import the required color constant first
+    from manim.utils.color.SVGNAMES import BROWN # Correct import
+    from manim import Line, Create, LEFT, RIGHT # Other necessary imports
+
+    # Now BROWN can be used
+    pencil = Line(LEFT, RIGHT, color=BROWN, stroke_width=8)
+    # self.play(Create(pencil)) # Example usage in a scene
+    ```
+
+### 【Manim Code Generation Rule: Correct Usage of `set_color_by_tex` with VGroups】
+
+1.  **Problem Description:**
+    Attempting to call the `Mobject.set_color_by_tex("tex_string", color)` method directly on a `VGroup` instance (e.g., `my_vgroup.set_color_by_tex("some_tex", RED)`) results in a `TypeError: Mobject.__getattr__.<locals>.setter() takes 2 positional arguments but 3 were given` or similar `AttributeError`.
+
+2.  **Reason:**
+    The `set_color_by_tex()` method is designed to operate on individual `MathTex` or `Tex` objects, searching within their specific internal structure for the provided TeX substring and applying the color. It is not implemented to recursively traverse a `VGroup` and apply the coloring to potential `MathTex`/`Tex` children. Calling it on a `VGroup` conflicts with the standard attribute handling mechanisms inherited from `Mobject`, leading to the `TypeError`.
+
+3.  **Correct Practice (Must Follow):**
+    *   You **must not** call `set_color_by_tex()` directly on a `VGroup` object.
+    *   To apply `set_color_by_tex` to `MathTex` or `Tex` elements contained within a `VGroup`, you **must** iterate through the sub-mobjects of the `VGroup`.
+    *   Inside the loop, check if the current sub-mobject is an instance of `MathTex` (or `Tex`).
+    *   If it is, call `set_color_by_tex()` on that **individual sub-mobject**.
+
+4.  **Code Example:**
+
+    ```python
+    # Assume explanation_lines is a VGroup containing multiple MathTex objects
+    # explanation_lines = VGroup(
+    #     MathTex(r"n_1, n_2:", r"\text{ Refractive indices}"),
+    #     MathTex(r"\theta_1:", r"\text{ Angle of incidence}"),
+    #     MathTex(r"\theta_2:", r"\text{ Angle of refraction}")
+    # )
+
+    # --- Incorrect Usage (Causes TypeError) ---
+    # try:
+    #     explanation_lines.set_color_by_tex("n_1", MY_TEXT_COLOR) # Error!
+    #     explanation_lines.set_color_by_tex(r"\theta_1", MY_HIGHLIGHT_COLOR) # Error!
+    # except TypeError as e:
+    #     print(f"Error: {e}")
+
+    # --- Correct Usage ---
+    # Iterate through the VGroup and apply to individual MathTex objects
+    for line_mob in explanation_lines:
+        if isinstance(line_mob, MathTex): # Check if it's a MathTex object
+            line_mob.set_color_by_tex("n_1", MY_TEXT_COLOR)
+            line_mob.set_color_by_tex("n_2", MY_TEXT_COLOR)
+            # Use raw string r"..." for TeX strings containing backslashes
+            line_mob.set_color_by_tex(r"\theta_1", MY_HIGHLIGHT_COLOR)
+            line_mob.set_color_by_tex(r"\theta_2", MY_HIGHLIGHT_COLOR)
+
+    # Example scene usage:
+    # self.play(FadeIn(explanation_lines))
+    ```
+### 【Manim Code Generation Rule: Use Defined Buffer Constants】
+
+1.  **Problem Description:**
+    Using a non-existent buffer constant like `XLARGE_BUFF` in positioning methods (e.g., `Mobject.next_to(..., buff=XLARGE_BUFF)`) triggers a `NameError: name 'XLARGE_BUFF' is not defined`.
+
+2.  **Reason:**
+    Manim's standard library defines specific buffer size constants: `SMALL_BUFF`, `MED_SMALL_BUFF`, `MED_LARGE_BUFF`, and `LARGE_BUFF`. Constants like `XLARGE_BUFF` are not predefined in the standard Manim namespace.
+
+3.  **Correct Practice (Must Follow):**
+    *   When specifying buffer sizes, you **must** use only the standard defined constants: `SMALL_BUFF`, `MED_SMALL_BUFF`, `MED_LARGE_BUFF`, `LARGE_BUFF`.
+    *   If a buffer size larger than `LARGE_BUFF` is required, or if a specific non-standard size is needed, you **must** use a direct numerical value (e.g., `buff=1.0`, `buff=1.5`, `buff=2.0`).
+    *   **Absolutely forbid** the use of undefined buffer constants like `XLARGE_BUFF`. Check the spelling and case of standard buffer constants carefully.
+
+4.  **Code Example:**
+
+    ```python
+    from manim import Square, Circle, RIGHT, LARGE_BUFF, MED_LARGE_BUFF # Necessary imports
+
+    # Example Mobjects
+    square = Square()
+    circle = Circle()
+
+    # --- Correct Usage ---
+    # Using a standard defined constant
+    circle.next_to(square, RIGHT, buff=LARGE_BUFF)
+
+    # Using a numerical value for a custom or larger buffer
+    triangle = Triangle().next_to(circle, RIGHT, buff=1.2) # Custom numerical buffer
+
+    # --- Incorrect Usage (Causes NameError) ---
+    # star = Star()
+    # try:
+    #     # Incorrect: Using an undefined constant
+    #     star.next_to(triangle, RIGHT, buff=XLARGE_BUFF)
+    # except NameError as e:
+    #     print(f"Error expected: {e}")
+
+    # Example usage in a scene:
+    # self.play(Create(square), Create(circle), Create(triangle))
+    ```
+
+### 【Manim Code Generation Rule: Correctly Accessing Sub-Mobjects within VGroups】
+
+1.  **Problem Description:**
+    Attempting to use the `Mobject.get_part_by_tex("some_string")` method on a `Mobject`, particularly a `VGroup`, that was constructed manually from shapes (like `Line`, `Rectangle`, `Ellipse`, `Arc`) rather than being generated from a `Tex` or `MathTex` string, results in a `TypeError: Mobject.__getattr__.<locals>.getter() takes 1 positional argument but 2 were given` or similar `AttributeError`.
+
+2.  **Reason:**
+    The `get_part_by_tex()` method is specifically designed to locate and return sub-mobjects within `Tex` or `MathTex` objects that correspond to specific segments of the original LaTeX source string. It relies on metadata generated during the TeX compilation process. When called on a `VGroup` (or other Mobject) created by combining standard shapes, this LaTeX-specific mechanism is inapplicable and conflicts with the object's standard attribute handling, leading to the error.
+
+3.  **Correct Practice (Must Follow):**
+    *   **Only** use `get_part_by_tex()` or `get_parts_by_tex()` on instances of `Tex` or `MathTex`.
+    *   To access a specific sub-mobject within a `VGroup` that was created by manually adding other Mobjects (e.g., `my_group = VGroup(shape1, shape2, text1)`), you **must** use **direct indexing** based on the order the sub-mobjects were added to the group. For example, `my_group[0]` accesses the first added sub-mobject (`shape1`), `my_group[1]` accesses the second (`shape2`), and so on.
+    *   If you need to frequently reference a specific part of a complex, manually constructed object (like the neck of a flask created in a helper function), ensure the helper function returns the parts logically or access them via their index within the returned `VGroup`.
+    *   **Absolutely forbid** using `get_part_by_tex()` to retrieve parts of `VGroup`s constructed from non-TeX sources.
+
+4.  **Code Example:**
+
+    ```python
+    # Assume create_flask returns a VGroup where the neck part is the first element added
+    # flask = create_flask(...) # flask is a VGroup, flask[0] is the neck
+
+    # --- Incorrect Usage (Causes TypeError) ---
+    # condenser = Rectangle(...)
+    # try:
+    #     # Incorrect: Using get_part_by_tex on a VGroup not from TeX
+    #     condenser.next_to(flask.get_part_by_tex("neck_lines"), UP) # "neck_lines" is not a TeX string part
+    # except TypeError as e:
+    #     print(f"Error expected: {e}")
+
+    # --- Correct Usage ---
+    condenser = Rectangle(height=0.4, width=3.0, color=MY_GRAY, stroke_width=2).rotate(-PI/6)
+    # Correct: Access the neck part (assuming it's the first element) using indexing
+    neck_part = flask[0]
+    condenser.next_to(neck_part, UP, buff=-0.1).shift(RIGHT*1.5) # Position relative to the indexed part
+
+    # Example scene usage:
+    # self.play(Create(flask), Create(condenser))
+    ```
+Okay, here is the rule based on the `AttributeError: Ellipse object has no attribute 'vertices'` error:
+
+### 【Manim Code Generation Rule: Do Not Use `get_vertices()` on Ellipse or Circle Objects】
+
+1.  **Problem Description:**
+    Attempting to call the `Mobject.get_vertices()` method on an instance of `Ellipse` or `Circle` results in an `AttributeError: 'Ellipse' object has no attribute 'vertices'` (or `'Circle' object has no attribute 'vertices'`).
+
+2.  **Reason:**
+    The `get_vertices()` method is primarily intended for `Polygon`-based objects (like `Rectangle`, `Square`, `Triangle`) which are defined by a discrete set of corner points (vertices). `Ellipse` and `Circle` are parametrically defined curves based on center, radii (or width/height), and angles. They do not possess distinct "vertices" in the same way polygons do, and thus the `get_vertices()` method is not implemented for them.
+
+3.  **Correct Practice (Must Follow):**
+    *   To obtain specific points on the boundary or path of an `Ellipse` or `Circle`, you **must** use alternative methods:
+        *   **Center:** Use `ellipse.get_center()`.
+        *   **Extreme Points:** Calculate points like the leftmost, rightmost, topmost, or bottommost based on the object's center and dimensions (width/height for `Ellipse`, radius for `Circle`).
+            *   Rightmost point of Ellipse: `ellipse.get_center() + RIGHT * ellipse.width / 2`
+            *   Topmost point of Ellipse: `ellipse.get_center() + UP * ellipse.height / 2`
+            *   Point on Circle at angle `theta`: `circle.get_center() + circle.radius * (np.cos(theta)*RIGHT + np.sin(theta)*UP)`
+        *   **Points Along Path:** Use `ellipse.point_from_proportion(alpha)` where `alpha` is a value from 0 to 1 representing the fractional distance along the curve's path.
+        *   **Start/End Points:** Use `ellipse.get_start()` and `ellipse.get_end()` (often correspond to the point at `alpha=0` and `alpha=1`).
+    *   When constructing other shapes relative to an `Ellipse` or `Circle` (like using `ArcBetweenPoints` to draw part of an ellipse), calculate the required start and end points using the methods above instead of trying to retrieve non-existent vertices.
+    *   **Absolutely forbid** calling `.get_vertices()` on `Ellipse` or `Circle` objects.
+
+4.  **Code Example:**
+
+    ```python
+    # Assume 'ellipse' is an Ellipse object
+    # ellipse = Ellipse(width=4, height=2)
+
+    # --- Incorrect Usage (Causes AttributeError) ---
+    # try:
+    #     # Incorrect: Calling get_vertices() on an Ellipse
+    #     vertices = ellipse.get_vertices()
+    # except AttributeError as e:
+    #     print(f"Error expected: {e}")
+
+    # --- Correct Usage ---
+    # Get center
+    center_point = ellipse.get_center()
+
+    # Calculate specific points
+    right_point = ellipse.get_center() + RIGHT * ellipse.width / 2
+    top_point = ellipse.get_center() + UP * ellipse.height / 2
+    left_point = ellipse.get_center() + LEFT * ellipse.width / 2
+
+    # Get point at 25% along the path
+    quarter_point = ellipse.point_from_proportion(0.25)
+
+    # Example: Create an arc for the bottom half using calculated points
+    # bottom_arc = ArcBetweenPoints(right_point, left_point, angle=-PI)
+
+    # Example scene usage:
+    # self.play(Create(ellipse))
+    # self.play(Create(Dot(right_point)), Create(Dot(top_point)))
+    # self.play(Create(bottom_arc))
+    ```
+### 【Manim Code Generation Rule: Handling Mixed Unicode Text and LaTeX Math in `MathTex`】
+
+1.  **Problem Description:**
+    Directly including non-ASCII Unicode characters (e.g., Chinese, Japanese, Korean) within `MathTex` strings, even inside `\text{...}` commands (like `MathTex(r"\text{有机物中的 N}")`), leads to `ValueError: latex error converting to dvi` or similar LaTeX compilation errors (e.g., `LaTeX Error: Unicode character ...`).
+
+2.  **Reason:**
+    `MathTex` relies on a LaTeX backend for rendering. Standard LaTeX configurations, including Manim's default, often do not support direct Unicode character input unless specific packages (like `ctex` for Chinese) and configurations (like using XeLaTeX) are explicitly set up in the TeX template. The `\text{...}` command still uses the standard LaTeX text engine, which fails with Unicode without this setup. This differs from Manim's `Text` object, which uses the Pango rendering engine for robust Unicode handling.
+
+3.  **Correct Practice (Must Follow):**
+    When a mathematical expression needs to contain both standard LaTeX math and non-ASCII Unicode text:
+    *   **Isolate LaTeX Parts:** Use `MathTex` strictly for the purely mathematical symbols, operators, variables, and structures (like `+`, `\rightarrow`, `H_2SO_4`, `(NH_4)_2SO_4`).
+    *   **Isolate Unicode Text:** Use Manim's `Text` object for *all* parts containing Unicode characters (e.g., "有机物中的 N", "催化剂"). Ensure a suitable font supporting these characters is configured (see Font Checking rule).
+    *   **Combine Manually:** Construct the final expression by combining the `MathTex` and `Text` objects using `VGroup`.
+    *   **Manual Layout:** Use layout methods like `.arrange(RIGHT, ...)` or `.next_to()` to position the `Text` and `MathTex` elements correctly relative to each other. For elements meant to be above/below others (like text over a reaction arrow), use `.next_to(..., UP/DOWN)`. **Do not** attempt to embed the `Text` objects directly into the `MathTex` string using `\text{}`.
+
+4.  **Code Example:**
+    ```python
+    # Assume necessary imports and color definitions
+    from manim import Text, MathTex, VGroup, RIGHT, UP, DOWN, Create, Write, FadeIn
+
+    # --- Correct Usage Example within a Scene ---
+    # Assume final_font is set for Chinese if needed
+    # Text.set_default(font=final_font)
+
+    # Create the parts separately for: Organic N + H₂SO₄ --Catalyst/Heat--> (NH₄)₂SO₄
+    eq_part1 = Text("有机物中的 N", font_size=40, color=MY_LIGHT_TEXT)
+    eq_part2 = MathTex("+", font_size=40, color=MY_LIGHT_TEXT)
+    eq_part3 = MathTex("H_2SO_4", font_size=40, color=MY_ORANGE) # Chemical formula
+    eq_part4 = MathTex(r"\xrightarrow{\Delta}", font_size=40, color=MY_LIGHT_TEXT) # Arrow base with heat
+    eq_part5 = Text("催化剂", font_size=24, color=MY_GREEN) # Text above arrow
+    eq_part6 = MathTex("(NH_4)_2SO_4", font_size=40, color=MY_BLUE) # Chemical formula
+
+    # Position text above arrow
+    eq_part5.next_to(eq_part4, UP, buff=SMALL_BUFF*0.5)
+
+    # Combine the parts using VGroup and arrange
+    equation_digestion = VGroup(eq_part1, eq_part2, eq_part3, eq_part4, eq_part5, eq_part6).arrange(RIGHT, buff=0.2)
+
+    # Example animation
+    # self.play(
+    #     AnimationGroup(
+    #         FadeIn(eq_part1), Write(eq_part2), Write(eq_part3),
+    #         Write(eq_part4), FadeIn(eq_part5), Write(eq_part6),
+    #         lag_ratio=0.2
+    #     ),
+    #     run_time=3.0
+    # )
+
+
+    # --- Incorrect Usage (Causes LaTeX Error) ---
+    # try:
+    #     # Incorrect: Embedding Chinese directly in MathTex using \text{}
+    #     equation_error = MathTex(
+    #         r"\text{有机物中的 N} + \text{H}_2\text{SO}_4 \xrightarrow[\Delta]{\text{催化剂}} (\text{NH}_4)_2\text{SO}_4",
+    #         font_size=40
+    #     )
+    #     self.play(Write(equation_error))
+    # except ValueError as e:
+    #     print(f"Error expected: {e}") # Will likely raise ValueError: latex error...
+    ```    
