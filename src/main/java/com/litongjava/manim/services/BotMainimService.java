@@ -18,7 +18,7 @@ public class BotMainimService {
 
     ExplanationVo explanationVo = new ExplanationVo(chatIdLong.toString(), text);
     try {
-      Aop.get(MainimService.class).index(explanationVo, true, null);
+      Aop.get(ExplanationVideoService.class).index(explanationVo, true, null);
     } catch (Exception e) {
       log.error("Exception", e);
     }

@@ -1,7 +1,7 @@
 package com.litongjava.manim.handler;
 
 import com.litongjava.jfinal.aop.Aop;
-import com.litongjava.manim.services.MainimService;
+import com.litongjava.manim.services.ExplanationVideoService;
 import com.litongjava.manim.vo.ExplanationVo;
 import com.litongjava.tio.boot.http.TioRequestContext;
 import com.litongjava.tio.core.Tio;
@@ -13,7 +13,7 @@ import com.litongjava.tio.utils.thread.TioThreadUtils;
 
 public class ExplanationHandler {
 
-  MainimService mainimService = Aop.get(MainimService.class);
+  ExplanationVideoService mainimService = Aop.get(ExplanationVideoService.class);
 
   public HttpResponse index(HttpRequest request) {
     HttpResponse response = TioRequestContext.getResponse();

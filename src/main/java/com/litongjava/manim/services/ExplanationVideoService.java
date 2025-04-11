@@ -35,7 +35,7 @@ import com.litongjava.tio.utils.snowflake.SnowflakeIdUtils;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MainimService {
+public class ExplanationVideoService {
   private Striped<Lock> locks = Striped.lock(1024);
   private LinuxService linuxService = Aop.get(LinuxService.class);
   private String video_server_name = "https://manim.collegebot.ai";

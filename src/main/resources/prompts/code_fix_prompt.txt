@@ -1,0 +1,1 @@
+将这个问题写成提示词,防止你下次生成代码时再出现错误.我要添加到大模型的提示模板中,英文输出,不用输出代码,格式 ### 【Manim Code Generation Rule: title】 1.Problem Description  2.Reason 3. Correct Practice (Must Follow) 4. Code Example

@@ -15,6 +15,7 @@ import com.litongjava.gemini.GoogleGeminiModels;
 import com.litongjava.linux.LinuxClient;
 import com.litongjava.linux.ProcessResult;
 import com.litongjava.openai.chat.ChatMessage;
+import com.litongjava.template.PromptEngine;
 import com.litongjava.tio.core.ChannelContext;
 import com.litongjava.tio.core.Tio;
 import com.litongjava.tio.http.common.sse.SsePacket;
@@ -60,14 +61,11 @@ public class LinuxService {
     }
 
     ProcessResult executeMainmCode = null;
-    final int maxAttempts = 10; // 最多尝试 10 次
-    // 用于记录每次调用生成修复代码后的返回结果
+    final int maxAttempts = 10;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      //保存错误日志
       //Row row = Row.by("id", SnowflakeIdUtils.id()).set("topic", topic).set("md5", md5).set("python_code", code).set("error", stdErr);
       //Db.save("ef_generate_error_code", row);
 
-      // 构造用户请求消息
       messages.add(new ChatMessage("model", code));
       messages.add(new ChatMessage("user", "代码执行遇到错误,请修复,并输出修复后的代码 " + stdErr));
       geminiChatRequestVo.setChatMessages(messages);
@@ -110,9 +108,9 @@ public class LinuxService {
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
 
+      String codeFixPrompt = PromptEngine.renderToString("code_fix_prompt.txt");
       messages.add(new ChatMessage("model", code));
-      messages.add(new ChatMessage("user",
-          "将这个问题写成提示词,防止你下次生成代码时再出现错误.我要添加到大模型的提示模板中,英文输出,不用输出代码,格式 ### 【Manim Code Generation Rule: title】 1.Problem Description  2.Reason 3. Correct Practice (Must Follow) 4. Code Example"));
+      messages.add(new ChatMessage("user", codeFixPrompt));
       geminiChatRequestVo.setChatMessages(messages);
 
       message = "start generate avoid prompt " + attempt;
@@ -148,10 +146,8 @@ public class LinuxService {
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
 
-      //支持下次生成
       messages.add(new ChatMessage("model", avoidPrompt));
 
-      // 如果代码执行有输出（即成功），则根据情况做额外处理（比如构造避免提示）后直接返回结果
       if (StrUtil.isNotBlank(executeMainmCode.getOutput())) {
         String value = "success " + attempt;
         log.info(value);
@@ -159,17 +155,16 @@ public class LinuxService {
           byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info ", value));
           Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
         }
-        log.info("生成成功:{}:", executeMainmCode.getOutput());
+        log.info("success :{}:", executeMainmCode.getOutput());
         return executeMainmCode;
       }
-      // 如果执行失败，则记录日志，并通过 SSE 通知前端
-      log.error("python 第{}次执行失败 error:{}", attempt + 1, stdErr);
+
+      log.error("python {} Failed, error:{}", attempt + 1, stdErr);
       if (channelContext != null) {
         byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("error", "Python code: 第" + (attempt + 1) + "次执行失败"));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
     }
-    // 若全部尝试后依然没有成功，就返回最后一次执行结果（可能输出为空）
     return executeMainmCode;
   }
 
@@ -200,9 +195,6 @@ public class LinuxService {
 
     GeminiChatResponseVo chatResponse = null;
     GeminiGenerationConfigVo geminiGenerationConfigVo = new GeminiGenerationConfigVo();
-    //设置参数
-    //GeminiResponseSchema pythonCodeSchema = GeminiResponseSchema.pythonCode();
-    //geminiGenerationConfigVo.buildJsonValue().setResponseSchema(pythonCodeSchema);
 
     geminiGenerationConfigVo.setTemperature(0d);
     geminiChatRequestVo.setGenerationConfig(geminiGenerationConfigVo);
