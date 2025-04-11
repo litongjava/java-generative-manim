@@ -1,4 +1,3 @@
-```python
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
@@ -7,23 +6,49 @@ from contextlib import contextmanager
 from manim import *
 import hashlib
 from moviepy import AudioFileClip # Correct import
+import manimpango # For font checking
+
+# --- Font Check --- (Ensure a standard font is available)
+DEFAULT_FONT = "Arial" # Use a common default font
+available_fonts = manimpango.list_fonts()
+final_font = None
+
+if DEFAULT_FONT in available_fonts:
+    print(f"Font '{DEFAULT_FONT}' found.")
+    final_font = DEFAULT_FONT
+else:
+    print(f"Warning: Font '{DEFAULT_FONT}' not found. Trying fallback fonts...")
+    # Fallbacks for general English text
+    fallback_fonts = ["Helvetica", "Verdana", "DejaVu Sans", "Liberation Sans"]
+    found_fallback = False
+    for font in fallback_fonts:
+        if font in available_fonts:
+            print(f"Switched to fallback font: '{font}'")
+            final_font = font
+            found_fallback = True
+            break
+    if not found_fallback:
+        print(f"Warning: Neither '{DEFAULT_FONT}' nor fallback fonts found. Using Manim default.")
+        # final_font remains None
 
 # --- Custom Colors ---
-MY_LIGHT_GRAY = "#f0f0f0"
-MY_DARK_GRAY = "#555555"
-MY_BLUE = "#007bff"
-MY_RED = "#dc3545"
-MY_GREEN = "#28a745"
-MY_ORANGE = "#ffc107" # Matches cos θ
-MY_PURPLE = "#800080" # Highlighting
-MY_BLACK = "#000000"
-MY_WHITE = "#ffffff"
-MY_CONCLUSION_BG = "#001f3f" # Dark blue for conclusion
-MY_CONCLUSION_FG = "#ffffff"
-MY_CONCLUSION_SUB = "#cccccc"
+MY_LIGHT_BLUE_BG = "#E3F2FD" # Light blue background
+MY_WATER_BLUE = "#90CAF9"   # Water medium color
+MY_GLASS_BLUE = "#B0E0E6"   # Glass medium color (alternative)
+MY_AIR_ALPHA = 0.0         # Air is transparent
+MY_DARK_TEXT = "#1E293B"   # Dark text color
+MY_HIGHLIGHT_RED = "#E53935" # Incident angle, etc.
+MY_HIGHLIGHT_GREEN = "#43A047" # Refracted angle, etc.
+MY_RAY_YELLOW = "#FFCA28"   # Light ray color
+MY_NORMAL_GRAY = "#757575"   # Normal line color
+MY_FORMULA_BLUE = "#0D47A1"  # Formula color
+MY_WHITE = "#FFFFFF"        # Subtitles on dark bg
+MY_BLACK = "#000000"        # Subtitles on light bg
+MY_PENCIL_BROWN = "#8D6E63"  # Pencil color
+from manim.utils.color.SVGNAMES import BROWN # Import BROWN
 
 # --- TTS Caching Setup ---
-CACHE_DIR = "#(output_path)/audio"
+CACHE_DIR = r"#(output_path)/audio"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 class CustomVoiceoverTracker:
@@ -79,12 +104,11 @@ def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/
             # print(f"Audio duration: {duration:.2f}s")
         except Exception as e:
             print(f"Error processing audio file {audio_file}: {e}")
-            # If duration fails, treat as no audio
             audio_file = None
             duration = 0
     else:
         # print(f"TTS audio file not found or not created: {audio_file}")
-        audio_file = None # Ensure audio_path is None if file doesn't exist
+        audio_file = None
 
     tracker = CustomVoiceoverTracker(audio_file, duration)
     try:
@@ -93,53 +117,37 @@ def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/
         pass # Keep cache
 
 # -----------------------------
-# CombinedScene: Unit Circle to Cosine Graph
+# CombinedScene: Explaining Refraction of Light
 # -----------------------------
-class CombinedScene(MovingCameraScene):
+class CombinedScene(Scene):
     """
-    Visually explains the connection between the unit circle and the cosine function.
+    Explains the phenomenon of light refraction using diagrams and examples.
+    Uses English for narration and subtitles.
     """
     def setup(self):
-        MovingCameraScene.setup(self)
-        # Optional: Set default font here if checked
-        # if final_font: Text.set_default(font=final_font)
-        # Initialize theta tracker for animations involving angle
-        self.theta_tracker = ValueTracker(0)
-        # Store elements that need to be accessed across animations within a scene part
-        self.unit_circle_elements = VGroup()
-        self.graph_elements = VGroup()
+        Scene.setup(self)
+        # Set default font if found
+        if final_font:
+            Text.set_default(font=final_font)
+        # Variable to hold the current scene number mobject
+        self.current_scene_num_mob = None
+        # Store elements needed across animations within a scene part
+        self.diagram_elements = VGroup()
 
-    def construct(self):
-        # --- Play Scenes Sequentially ---
-        self.play_scene_01()
-        self.clear_and_reset() # Clear before starting next scene
-
-        self.play_scene_02()
-        self.clear_and_reset() # Clear before starting next scene (Needed for Scene 3 layout)
-
-        self.play_scene_03()
-        self.clear_and_reset() # <<--- ADDED: Clear before Scene 4 to prevent overlap
-
-        self.play_scene_04()
-        self.clear_and_reset() # Clear before conclusion
-
-        self.play_scene_05()
-        # Final wait is handled in play_scene_05
-
-    def get_scene_number(self, number_str, color=MY_BLACK):
-        """Creates and positions the scene number."""
-        scene_num = Text(number_str, font_size=24, color=color) # Allow color change
-        # Increase buffer to avoid overlap with potential titles near the top edge
-        scene_num.to_corner(UR, buff=MED_LARGE_BUFF) # Use a larger buffer
-        scene_num.set_z_index(10)
-        return scene_num
+    def update_scene_number(self, number_str, color=MY_DARK_TEXT):
+        """Fades out the old scene number and fades in the new one."""
+        new_scene_num = Text(number_str, font_size=24, color=color).to_corner(UR, buff=MED_LARGE_BUFF).set_z_index(10)
+        animations = [FadeIn(new_scene_num, run_time=0.5)]
+        if self.current_scene_num_mob:
+            animations.append(FadeOut(self.current_scene_num_mob, run_time=0.5))
+        self.play(*animations)
+        self.current_scene_num_mob = new_scene_num # Update the reference
 
     def clear_and_reset(self):
-        """Clears all objects and resets camera and trackers."""
+        """Clears all objects and resets necessary states."""
         # Clear updaters from all mobjects first
         mobjects_to_clear = list(self.mobjects) # Make a copy
         for mob in mobjects_to_clear:
-            # Check if mob exists and has the get_updaters method
             if mob is not None and hasattr(mob, 'get_updaters') and mob.get_updaters():
                 mob.clear_updaters()
 
@@ -150,580 +158,496 @@ class CombinedScene(MovingCameraScene):
 
         self.clear() # Clears self.mobjects
 
-        # Reset camera
-        self.camera.frame.move_to(ORIGIN)
-        self.camera.frame.set(width=config.frame_width, height=config.frame_height)
-        # Reset any camera rotation if needed (MovingCameraScene uses frame properties)
-        # self.camera.frame.set_theta(0) # Example if rotation was used
+        # Reset stored groups
+        self.diagram_elements = VGroup()
 
-        # Reset trackers
-        self.theta_tracker.set_value(0)
-
-        # Clear stored groups
-        self.unit_circle_elements = VGroup()
-        self.graph_elements = VGroup()
+        # Reset camera (if using MovingCameraScene, otherwise not needed for Scene)
+        # self.camera.frame.move_to(ORIGIN)
+        # self.camera.frame.set(width=config.frame_width, height=config.frame_height)
 
         self.wait(0.1)
 
-    # --- Scene 1: Introduction to the Unit Circle ---
+    def construct(self):
+        # --- Play Scenes Sequentially ---
+        self.play_scene_01()
+        # Scene 2 builds on Scene 1, so no clear here
+
+        self.play_scene_02()
+        # Scene 3 builds on Scene 2 diagram, so no clear here
+
+        self.play_scene_03()
+        self.clear_and_reset() # Clear after Scene 3
+
+        self.play_scene_04()
+        self.clear_and_reset()
+
+        self.play_scene_05()
+        # Final wait is handled in play_scene_05
+
+    # --- Scene 1: Introduction ---
     def play_scene_01(self):
-        """Scene 1: Introduces the unit circle and its components."""
+        """Scene 1: Introduces the phenomenon of refraction."""
         # Background
         bg1 = Rectangle(width=config.frame_width, height=config.frame_height,
-                        fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
+                        fill_color=MY_LIGHT_BLUE_BG, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
         self.add(bg1)
 
         # Scene Number
-        scene_num_01 = self.get_scene_number("01", color=MY_BLACK)
-        self.add(scene_num_01)
+        self.update_scene_number("01", color=MY_DARK_TEXT)
 
         # Title
-        title = Text("The Unit Circle", font_size=48, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
+        title = Text("Refraction of Light", font_size=60, color=MY_DARK_TEXT)
+        title.to_edge(UP, buff=MED_LARGE_BUFF)
 
-        # Coordinate Axes
-        axes = Axes(
-            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1],
-            x_length=6, y_length=6,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"numbers_to_include": [-1, 1]},
-            y_axis_config={"numbers_to_include": [-1, 1]},
-            tips=False
-        )
-        x_label = axes.get_x_axis_label("x", edge=RIGHT, direction=RIGHT, buff=SMALL_BUFF)
-        # --- MODIFIED Y LABEL POSITION ---
-        y_label = axes.get_y_axis_label("y", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF) # Position left of axis top
-        axes_labels = VGroup(x_label, y_label).set_color(MY_DARK_GRAY)
+        # Media Interface
+        interface_y = 0
+        interface = Line(LEFT * config.frame_width / 2, RIGHT * config.frame_width / 2, color=MY_DARK_TEXT).move_to(UP * interface_y)
 
-        # Unit Circle
-        radius_val = 1.0
-        origin_point = axes.c2p(0, 0)
-        radius_point = axes.c2p(radius_val, 0)
-        screen_radius = np.linalg.norm(radius_point - origin_point)
-        circle = Circle(radius=screen_radius, color=MY_BLUE, stroke_width=3, arc_center=origin_point)
+        # Media Backgrounds (Subtle)
+        air_rect = Rectangle(width=config.frame_width, height=config.frame_height/2, fill_color=MY_LIGHT_BLUE_BG, fill_opacity=MY_AIR_ALPHA, stroke_width=0).next_to(interface, UP, buff=0)
+        water_rect = Rectangle(width=config.frame_width, height=config.frame_height/2, fill_color=MY_WATER_BLUE, fill_opacity=0.3, stroke_width=0).next_to(interface, DOWN, buff=0)
+        media_bg = VGroup(air_rect, water_rect).set_z_index(-5)
 
-        # Radius, Point P, Angle Theta
-        self.theta_tracker.set_value(PI / 4)
+        # Light Ray Calculation
+        incident_angle_deg = 45
+        incident_angle_rad = np.radians(incident_angle_deg)
+        n1 = 1.0 # Air
+        n2 = 1.33 # Water
+        # Snell's Law: n1 * sin(theta1) = n2 * sin(theta2) => sin(theta2) = (n1/n2) * sin(theta1)
+        sin_theta2 = (n1 / n2) * np.sin(incident_angle_rad)
+        # Ensure argument for arcsin is valid
+        if abs(sin_theta2) <= 1:
+            refracted_angle_rad = np.arcsin(sin_theta2)
+        else:
+            print("Warning: Invalid angle calculation. Using default.")
+            refracted_angle_rad = np.radians(32) # Default fallback angle
 
-        radius = always_redraw(
-            lambda: Line(
-                axes.c2p(0, 0),
-                axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), radius_val * np.sin(self.theta_tracker.get_value())),
-                color=MY_RED, stroke_width=3
-            )
-        )
-        p_dot = always_redraw(
-            lambda: Dot(
-                axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), radius_val * np.sin(self.theta_tracker.get_value())),
-                color=MY_RED, radius=0.08
-            )
-        )
-        p_label = always_redraw(
-            lambda: MathTex("P", color=MY_RED, font_size=36).next_to(p_dot.get_center(), UR, buff=SMALL_BUFF)
-        )
-        theta_arc = always_redraw(
-            lambda: Arc(
-                radius=0.4 * screen_radius,
-                start_angle=0,
-                angle=self.theta_tracker.get_value(),
-                color=MY_GREEN,
-                arc_center=axes.c2p(0, 0)
-            )
-        )
-        theta_label = always_redraw(
-            lambda: MathTex(r"\theta", color=MY_GREEN, font_size=36).move_to(
-                axes.c2p(0,0) + Arc(radius=0.6 * screen_radius, angle=self.theta_tracker.get_value()).point_from_proportion(0.5)
-            )
-        )
-        radius_label = always_redraw(
-             lambda: MathTex("r=1", color=MY_RED, font_size=30).next_to(radius.get_center(), UR, buff=SMALL_BUFF)
-        )
+        incidence_point = ORIGIN + UP * interface_y
 
-        # Group elements
-        self.unit_circle_elements.add(axes, axes_labels, circle, radius, p_dot, p_label, theta_arc, theta_label, radius_label)
-        self.add(radius, p_dot, p_label, theta_arc, theta_label, radius_label) # Add updaters
+        # Calculate ray vectors based on angles relative to the normal (DOWN)
+        incident_vector = rotate_vector(UP * 3, PI - incident_angle_rad) # From top-left
+        ray_start = incidence_point + incident_vector
+        refracted_vector = rotate_vector(DOWN * 3, refracted_angle_rad) # Towards bottom-right
+        ray_end = incidence_point + refracted_vector
 
-        # --- TTS ---
-        voice_text_01 = "Let's start with the unit circle. This is a circle centered at the origin with a radius of exactly one. We have our standard x and y axes. A point P moves along the circle. The line connecting the origin to P is the radius, which always has length 1. The angle between the positive x-axis and this radius is called theta."
+        incident_ray = Arrow(ray_start, incidence_point, buff=0, color=MY_RAY_YELLOW, stroke_width=4)
+        refracted_ray = Arrow(incidence_point, ray_end, buff=0, color=MY_RAY_YELLOW, stroke_width=4)
+
+        # Labels for Media
+        air_label = Text("Air", font_size=24, color=MY_DARK_TEXT).next_to(air_rect, UP, buff=-LARGE_BUFF).to_edge(LEFT, buff=MED_LARGE_BUFF)
+        water_label = Text("Water", font_size=24, color=MY_DARK_TEXT).next_to(water_rect, DOWN, buff=-LARGE_BUFF).to_edge(LEFT, buff=MED_LARGE_BUFF)
+        media_labels = VGroup(air_label, water_label)
+
+        # Store elements needed for the next scene
+        self.diagram_elements.add(title, interface, media_bg, incident_ray, refracted_ray, media_labels)
+
+        # Narration 1: Intro (English)
+        voice_text_01 = "Hello everyone! Have you ever noticed that when light passes from one medium, like air, into another, like water, its path bends? This phenomenon is called refraction of light."
         with custom_voiceover_tts(voice_text_01) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
             else:
-                print("Warning: Scene 1 TTS failed.")
+                print("Warning: Narration 1 TTS failed.")
 
             subtitle_voice = Text(voice_text_01, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # --- Animation ---
+            # Animation Sequence
             self.play(FadeIn(title), FadeIn(subtitle_voice), run_time=1.0)
-            self.play(Create(axes), Write(axes_labels), run_time=1.5)
-            self.play(GrowFromCenter(circle), run_time=1.5)
-            self.play(Create(radius), Create(p_dot), FadeIn(p_label), run_time=1.0)
-            self.play(Create(theta_arc), FadeIn(theta_label), run_time=1.0)
-            self.play(FadeIn(radius_label), run_time=0.5)
+            self.play(Create(interface), FadeIn(media_bg), FadeIn(media_labels), run_time=1.5)
+            self.play(Create(incident_ray), run_time=1.0)
+            self.play(Create(refracted_ray), run_time=1.0)
 
-            # Wait
-            anim_duration = 1.0 + 1.5 + 1.5 + 1.0 + 1.0 + 0.5
-            wait_time = max(0, tracker.duration - anim_duration - 0.5)
-            if wait_time > 0:
-                self.wait(wait_time)
+            # Synchronization
+            anim_duration = 1.0 + 1.5 + 1.0 + 1.0
+            wait_time = max(0, tracker.duration - anim_duration - 0.5) # Subtract subtitle fadeout time
+            if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
         self.wait(1)
+        # Keep elements for Scene 2
 
-    # --- Scene 2: Introducing Cosine as the X-Coordinate ---
+    # --- Scene 2: Key Concepts ---
     def play_scene_02(self):
-        """Scene 2: Defines cosine as the x-coordinate on the unit circle."""
-        # Background
-        bg2 = Rectangle(width=config.frame_width, height=config.frame_height,
-                        fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
-        self.add(bg2)
+        """Scene 2: Defines key terms: rays, normal, angles."""
+        # Scene number update
+        self.update_scene_number("02", color=MY_DARK_TEXT)
 
-        # Scene Number
-        scene_num_02 = self.get_scene_number("02", color=MY_BLACK)
-        self.add(scene_num_02)
+        # Retrieve elements from Scene 1 stored in self.diagram_elements
+        if not self.diagram_elements:
+             print("Error: diagram_elements is empty in Scene 2!")
+             return
 
-        # Recreate Unit Circle elements
-        axes = Axes(
-            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=6, y_length=6,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"numbers_to_include": [-1, 1]}, y_axis_config={"numbers_to_include": [-1, 1]},
-            tips=False
+        # Access elements safely
+        try:
+            title = self.diagram_elements[0] # Keep title
+            interface = self.diagram_elements[1]
+            incident_ray = self.diagram_elements[3]
+            refracted_ray = self.diagram_elements[4]
+            incidence_point = incident_ray.get_end() # Point where ray hits interface
+        except IndexError:
+            print("Error: Not enough elements in diagram_elements for Scene 2!")
+            return # Prevent crash
+
+        # Normal Line
+        normal = DashedLine(incidence_point + UP * 2, incidence_point + DOWN * 2, color=MY_NORMAL_GRAY, stroke_width=2)
+        normal_label = Text("Normal", font_size=20, color=MY_NORMAL_GRAY).next_to(normal.get_start(), RIGHT, buff=SMALL_BUFF)
+
+        # Angles Calculation
+        normal_vector_down = DOWN
+        normal_vector_up = UP
+        incident_vector = incident_ray.get_vector()
+        refracted_vector = refracted_ray.get_vector()
+
+        # Angle between incident ray and the UP part of the normal
+        angle_inc_rad = angle_between_vectors(incident_vector, normal_vector_up)
+        # Angle between refracted ray and the DOWN part of the normal
+        angle_ref_rad = angle_between_vectors(refracted_vector, normal_vector_down)
+
+        # Create Arcs based on calculated angles
+        angle_inc_arc = Arc(radius=0.6, start_angle=normal.get_angle() - PI/2 , angle=angle_inc_rad, arc_center=incidence_point, color=MY_HIGHLIGHT_RED)
+        angle_ref_arc = Arc(radius=0.6, start_angle=normal.get_angle() + PI/2, angle=-angle_ref_rad, arc_center=incidence_point, color=MY_HIGHLIGHT_GREEN) # Negative angle for clockwise
+
+        theta1_label = MathTex(r"\theta_1", font_size=30, color=MY_HIGHLIGHT_RED).move_to(
+             Arc(radius=0.8, start_angle=normal.get_angle() - PI/2, angle=angle_inc_rad, arc_center=incidence_point).point_from_proportion(0.5)
         )
-        x_label = axes.get_x_axis_label("x", edge=RIGHT, direction=RIGHT, buff=SMALL_BUFF).set_color(MY_DARK_GRAY)
-        # --- MODIFIED Y LABEL POSITION ---
-        y_label = axes.get_y_axis_label("y", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY) # Position left of axis top
-        axes_labels = VGroup(x_label, y_label)
-
-        radius_val = 1.0
-        origin_point = axes.c2p(0, 0)
-        radius_point = axes.c2p(radius_val, 0)
-        screen_radius = np.linalg.norm(radius_point - origin_point)
-        circle = Circle(radius=screen_radius, color=MY_BLUE, stroke_width=3, arc_center=origin_point)
-
-        self.theta_tracker.set_value(0)
-
-        radius = always_redraw(lambda: Line(axes.c2p(0, 0), axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), radius_val * np.sin(self.theta_tracker.get_value())), color=MY_RED, stroke_width=3))
-        p_dot = always_redraw(lambda: Dot(axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), radius_val * np.sin(self.theta_tracker.get_value())), color=MY_RED, radius=0.08))
-        p_label = always_redraw(lambda: MathTex("P", color=MY_RED, font_size=36).next_to(p_dot.get_center(), UR, buff=SMALL_BUFF))
-        theta_arc = always_redraw(lambda: Arc(radius=0.4 * screen_radius, start_angle=0, angle=self.theta_tracker.get_value(), color=MY_GREEN, arc_center=axes.c2p(0, 0)))
-        theta_label = always_redraw(lambda: MathTex(r"\theta", color=MY_GREEN, font_size=36).move_to(axes.c2p(0,0) + Arc(radius=0.6 * screen_radius, angle=self.theta_tracker.get_value()).point_from_proportion(0.5)))
-
-        self.add(axes, axes_labels, circle)
-        self.add(radius, p_dot, p_label, theta_arc, theta_label)
-
-        # New elements
-        vert_line = always_redraw(
-            lambda: DashedLine(
-                p_dot.get_center(),
-                axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), 0),
-                color=MY_ORANGE, stroke_width=2
-            )
-        )
-        x_intersect_dot = always_redraw(
-            lambda: Dot(axes.c2p(radius_val * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, radius=0.06)
-        )
-        cos_label = always_redraw(
-            lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=36).next_to(x_intersect_dot.get_center(), DOWN, buff=MED_SMALL_BUFF)
-        )
-        coord_label = always_redraw(
-            lambda: MathTex(r"(\cos \theta, \sin \theta)", color=MY_RED, font_size=36).next_to(p_dot.get_center(), RIGHT, buff=MED_SMALL_BUFF)
+        theta2_label = MathTex(r"\theta_2", font_size=30, color=MY_HIGHLIGHT_GREEN).move_to(
+             Arc(radius=0.8, start_angle=normal.get_angle() + PI/2, angle=-angle_ref_rad, arc_center=incidence_point).point_from_proportion(0.5)
         )
 
-        explanation_text = Text("Cosine (cos θ) is the x-coordinate of point P on the unit circle.",
-                                font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
+        # Ray Labels
+        inc_ray_label = Text("Incident Ray", font_size=20, color=MY_DARK_TEXT).next_to(incident_ray.get_start(), UP+LEFT, buff=SMALL_BUFF)
+        ref_ray_label = Text("Refracted Ray", font_size=20, color=MY_DARK_TEXT).next_to(refracted_ray.get_end(), DOWN+RIGHT, buff=SMALL_BUFF)
 
-        self.add(vert_line, x_intersect_dot, cos_label, coord_label) # Add updaters
+        # Add new elements to diagram group (append to existing)
+        new_elements = VGroup(normal, normal_label, angle_inc_arc, angle_ref_arc, theta1_label, theta2_label, inc_ray_label, ref_ray_label)
+        self.diagram_elements.add(*new_elements)
 
-        # --- TTS ---
-        voice_text_02 = "Now, let's focus on the coordinates of point P. If we drop a vertical line from P down to the x-axis, the x-coordinate of this intersection point is defined as the cosine of the angle theta, written as cos theta. The y-coordinate is the sine of theta. So, the coordinates of P are (cos theta, sin theta). Watch how the x-coordinate, cos theta, changes as the angle theta increases."
+        # Explanation Text (Positioned on the right)
+        explanation = VGroup(
+            Text("Key Concepts:", font_size=32, color=MY_DARK_TEXT, weight=BOLD),
+            Text("• Incident Ray: Light entering the interface.", font_size=24, color=MY_DARK_TEXT),
+            Text("• Refracted Ray: Light after passing the interface.", font_size=24, color=MY_DARK_TEXT),
+            Text("• Normal: Line perpendicular to the interface.", font_size=24, color=MY_DARK_TEXT),
+            Text("• Angle of Incidence (θ₁): Angle between incident ray and normal.", font_size=24, color=MY_DARK_TEXT),
+            Text("• Angle of Refraction (θ₂): Angle between refracted ray and normal.", font_size=24, color=MY_DARK_TEXT),
+            Text("Refraction occurs because light travels at different speeds in different media.", font_size=24, color=MY_DARK_TEXT, line_spacing=1.2)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.25)
+        explanation.to_edge(RIGHT, buff=LARGE_BUFF).shift(UP*0.5) # Position on right
+
+        # Narration 2: Key Concepts (English)
+        voice_text_02 = "Let's define some key terms. The incident ray is the light entering the interface. The refracted ray is the light after passing through. The normal is an imaginary line perpendicular to the interface. The angle of incidence, theta one, is the angle between the incident ray and the normal. The angle of refraction, theta two, is the angle between the refracted ray and the normal. Refraction happens mainly because the speed of light changes as it moves from one medium to another."
         with custom_voiceover_tts(voice_text_02) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
             else:
-                print("Warning: Scene 2 TTS failed.")
+                print("Warning: Narration 2 TTS failed.")
 
             subtitle_voice = Text(voice_text_02, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # --- Animation ---
-            self.play(FadeIn(explanation_text), FadeIn(subtitle_voice), run_time=1.0)
-            self.play(Create(vert_line), Create(x_intersect_dot), run_time=1.0)
-            self.play(FadeIn(cos_label), FadeIn(coord_label), run_time=1.0)
+            # Animation Sequence
+            self.play(FadeIn(subtitle_voice), run_time=0.5)
+            self.play(Create(normal), FadeIn(normal_label), run_time=1.5)
+            self.play(FadeIn(inc_ray_label), FadeIn(ref_ray_label), run_time=1.0)
+            self.play(Create(angle_inc_arc), Write(theta1_label), run_time=1.0)
+            self.play(Create(angle_ref_arc), Write(theta2_label), run_time=1.0)
+            self.play(FadeIn(explanation, shift=LEFT*0.5), run_time=2.0)
 
-            rotate_duration = 5.0
-            self.play(self.theta_tracker.animate.set_value(PI), run_time=rotate_duration, rate_func=linear)
+            # Synchronization
+            anim_duration = 0.5 + 1.5 + 1.0 + 1.0 + 1.0 + 2.0
+            wait_time = max(0, tracker.duration - anim_duration - 0.5) # Subtract fade out time
+            if wait_time > 0: self.wait(wait_time)
+            self.play(FadeOut(subtitle_voice), FadeOut(explanation), run_time=0.5) # Keep diagram
 
-            # Wait
-            anim_duration = 1.0 + 1.0 + 1.0 + rotate_duration
-            wait_time = max(0, tracker.duration - anim_duration - 0.5)
-            if wait_time > 0:
-                self.wait(wait_time)
-            self.play(FadeOut(subtitle_voice), run_time=0.5)
+        self.wait(0.5)
+        # Keep diagram elements for Scene 3
 
-        # No need to store elements as clear_and_reset is called next
-        self.wait(1)
-
-    # --- Scene 3: Graphing Cosine vs. Angle ---
+    # --- Scene 3: Snell's Law ---
     def play_scene_03(self):
-        """Scene 3: Connects the unit circle's x-coordinate to the cosine graph."""
-        # Background
-        bg3 = Rectangle(width=config.frame_width, height=config.frame_height,
-                        fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
-        self.add(bg3)
+        """Scene 3: Introduces Snell's Law."""
+        # Scene number update
+        self.update_scene_number("03", color=MY_DARK_TEXT)
 
-        # Scene Number
-        scene_num_03 = self.get_scene_number("03", color=MY_BLACK)
-        self.add(scene_num_03)
+        # Retrieve elements from previous scenes stored in self.diagram_elements
+        if not self.diagram_elements:
+             print("Error: diagram_elements is empty in Scene 3!")
+             return
 
-        # --- Left Side: Unit Circle (Smaller) ---
-        axes_unit = Axes(
-            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=4, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"numbers_to_include": [-1, 1]}, y_axis_config={"numbers_to_include": [-1, 1]},
-            tips=False
+        # Access media labels safely
+        try:
+            # Assuming media_labels (VGroup of air/water Text) is the 6th element added overall
+            media_labels_group = self.diagram_elements[5]
+            n1_label = media_labels_group[0] # Air label
+            n2_label = media_labels_group[1] # Water label
+        except IndexError:
+             print("Error: Could not find media labels in diagram_elements for Scene 3!")
+             n1_label = Text("Air").to_edge(UP).to_edge(LEFT) # Dummy position
+             n2_label = Text("Water").to_edge(DOWN).to_edge(LEFT) # Dummy position
+             self.add(n1_label, n2_label) # Add dummies if needed
+
+        # Snell's Law Formula
+        snell_law_formula = MathTex(
+            r"n_1 \sin \theta_1", r"=", r"n_2 \sin \theta_2",
+            font_size=48, color=MY_FORMULA_BLUE
         )
-        radius_val_unit = 1.0
-        origin_point_unit = axes_unit.c2p(0, 0)
-        radius_point_unit = axes_unit.c2p(radius_val_unit, 0)
-        screen_radius_unit = np.linalg.norm(radius_point_unit - origin_point_unit)
-        circle_unit = Circle(radius=screen_radius_unit, color=MY_BLUE, stroke_width=3, arc_center=origin_point_unit)
+        # Color parts of the formula using the main MathTex object
+        snell_law_formula.set_color_by_tex("n_1", MY_DARK_TEXT)
+        snell_law_formula.set_color_by_tex(r"\theta_1", MY_HIGHLIGHT_RED)
+        snell_law_formula.set_color_by_tex("n_2", MY_DARK_TEXT)
+        snell_law_formula.set_color_by_tex(r"\theta_2", MY_HIGHLIGHT_GREEN)
 
-        self.theta_tracker.set_value(0)
+        snell_law_formula.to_edge(UP, buff=1.5).shift(RIGHT*2) # Position top right
 
-        radius_unit = always_redraw(lambda: Line(axes_unit.c2p(0, 0), axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), radius_val_unit * np.sin(self.theta_tracker.get_value())), color=MY_RED, stroke_width=3))
-        p_dot_unit = always_redraw(lambda: Dot(axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), radius_val_unit * np.sin(self.theta_tracker.get_value())), color=MY_RED, radius=0.06))
-        theta_arc_unit = always_redraw(lambda: Arc(radius=0.3 * screen_radius_unit, start_angle=0, angle=self.theta_tracker.get_value(), color=MY_GREEN, arc_center=axes_unit.c2p(0, 0)))
-        vert_line_unit = always_redraw(lambda: DashedLine(p_dot_unit.get_center(), axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, stroke_width=2))
-        x_intersect_dot_unit = always_redraw(lambda: Dot(axes_unit.c2p(radius_val_unit * np.cos(self.theta_tracker.get_value()), 0), color=MY_ORANGE, radius=0.05))
-        cos_label_unit = always_redraw(lambda: MathTex(r"\cos \theta", color=MY_ORANGE, font_size=30).next_to(x_intersect_dot_unit.get_center(), DOWN, buff=MED_SMALL_BUFF))
+        # Explanation of n1, n2 (Refractive Index)
+        n1_math = MathTex(r"n_1", font_size=36, color=MY_DARK_TEXT).next_to(n1_label, DOWN, buff=SMALL_BUFF, aligned_edge=LEFT)
+        n2_math = MathTex(r"n_2", font_size=36, color=MY_DARK_TEXT).next_to(n2_label, UP, buff=SMALL_BUFF, aligned_edge=LEFT)
 
-        unit_circle_group_small = VGroup(axes_unit, circle_unit, radius_unit, p_dot_unit, theta_arc_unit, vert_line_unit, x_intersect_dot_unit, cos_label_unit)
-        unit_circle_group_small.scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
-        self.add(radius_unit, p_dot_unit, theta_arc_unit, vert_line_unit, x_intersect_dot_unit, cos_label_unit) # Add updaters
+        # Add n1, n2 labels to diagram elements
+        self.diagram_elements.add(n1_math, n2_math)
 
-        # --- Right Side: Cosine Graph ---
-        axes_graph = Axes(
-            x_range=[0, 2 * PI + 0.1, PI / 2],
-            y_range=[-1.2, 1.2, 1],
-            x_length=8, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"include_numbers": False},
-            y_axis_config={"numbers_to_include": [-1, 0, 1]},
-            tips=False
-        )
+        # Explanation Text
+        explanation_snell = VGroup(
+             Text("Snell's Law:", font_size=32, color=MY_DARK_TEXT, weight=BOLD),
+             Text("Describes the relationship between the angles.", font_size=24, color=MY_DARK_TEXT),
+             Text("n₁ and n₂ are the refractive indices of the media.", font_size=24, color=MY_DARK_TEXT),
+             Text("The refractive index relates to the speed of light in the medium.", font_size=24, color=MY_DARK_TEXT, line_spacing=1.2)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.25)
+        explanation_snell.next_to(snell_law_formula, DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
 
-        # Manually add Pi labels for x-axis
-        x_labels_pi = VGroup()
-        custom_x_values_labels = {
-            0: "0",
-            PI/2: r"\pi/2",
-            PI: r"\pi",
-            3*PI/2: r"3\pi/2",
-            2*PI: r"2\pi"
-        }
-        for x_val, label_tex in custom_x_values_labels.items():
-            label = MathTex(label_tex, font_size=24, color=MY_DARK_GRAY)
-            label.next_to(axes_graph.c2p(x_val, 0), DOWN, buff=MED_SMALL_BUFF)
-            x_labels_pi.add(label)
-
-        x_graph_label = axes_graph.get_x_axis_label(r"\theta", edge=DOWN, direction=DOWN, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
-        y_graph_label = axes_graph.get_y_axis_label(r"\cos \theta", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
-        axes_graph_labels = VGroup(x_graph_label, y_graph_label)
-        graph_group = VGroup(axes_graph, axes_graph_labels, x_labels_pi).to_edge(RIGHT, buff=LARGE_BUFF)
-
-        cosine_graph = axes_graph.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=3)
-
-        moving_dot_graph = always_redraw(
-            lambda: Dot(
-                axes_graph.input_to_graph_point(self.theta_tracker.get_value(), cosine_graph),
-                color=MY_RED, radius=0.08
-            )
-        )
-        connecting_line = always_redraw(
-            lambda: DashedLine(
-                x_intersect_dot_unit.get_center(),
-                moving_dot_graph.get_center(),
-                stroke_width=1, color=MY_DARK_GRAY, dash_length=0.05
-            )
-        )
-
-        # Group graph elements (add cosine_graph here)
-        self.graph_elements.add(graph_group, cosine_graph, moving_dot_graph, connecting_line)
-        self.add(moving_dot_graph, connecting_line) # Add updaters
-
-        # --- TTS ---
-        voice_text_03 = "Now, let's visualize how the cosine value relates to its graph. On the left, we have our unit circle. On the right, we'll plot the angle theta on the horizontal axis and the value of cos theta (the x-coordinate from the unit circle) on the vertical axis. As the angle theta increases from 0 to 2 pi on the unit circle, watch how the corresponding cos theta value traces out the familiar cosine wave on the graph."
+        # Narration 3: Snell's Law (English)
+        voice_text_03 = "The mathematical law describing this refraction is called Snell's Law. Its formula is n one sine theta one equals n two sine theta two. Here, n one and n two are the refractive indices of medium 1 and medium 2, respectively. This index reflects how fast light travels in that medium. Theta one is the angle of incidence, and theta two is the angle of refraction. This law precisely tells us how much the light ray will bend."
         with custom_voiceover_tts(voice_text_03) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
             else:
-                print("Warning: Scene 3 TTS failed.")
+                print("Warning: Narration 3 TTS failed.")
 
             subtitle_voice = Text(voice_text_03, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # --- Animation ---
+            # Animation Sequence
             self.play(FadeIn(subtitle_voice), run_time=0.5)
-            self.play(FadeIn(unit_circle_group_small, shift=RIGHT), Create(graph_group), run_time=2.0)
-            self.add(moving_dot_graph, connecting_line)
+            self.play(Write(snell_law_formula), run_time=2.0)
+            self.play(FadeIn(n1_math), FadeIn(n2_math), run_time=1.0)
+            self.play(FadeIn(explanation_snell, shift=LEFT*0.2), run_time=2.0)
+            # Add highlights synchronized roughly with narration parts
+            self.wait(1.0) # Wait before highlights
+            # Use get_part_by_tex on the main MathTex object
+            self.play(Indicate(snell_law_formula.get_part_by_tex("n_1"), color=MY_DARK_TEXT))
+            self.wait(0.5)
+            self.play(Indicate(snell_law_formula.get_part_by_tex(r"\theta_1"), color=MY_HIGHLIGHT_RED))
+            self.wait(1.0)
+            self.play(Indicate(snell_law_formula.get_part_by_tex("n_2"), color=MY_DARK_TEXT))
+            self.wait(0.5)
+            self.play(Indicate(snell_law_formula.get_part_by_tex(r"\theta_2"), color=MY_HIGHLIGHT_GREEN))
+            self.wait(1.0)
 
-            graph_creation_duration = 6.0
-            self.play(
-                self.theta_tracker.animate.set_value(2 * PI),
-                Create(cosine_graph),
-                run_time=graph_creation_duration,
-                rate_func=linear
-            )
+            # Synchronization
+            highlight_duration = 4 * (0.8 + 0.5) # Approx time for 4 indicates + waits
+            anim_duration = 0.5 + 2.0 + 1.0 + 2.0 + 1.0 + highlight_duration + 1.0
+            wait_time = max(0, tracker.duration - anim_duration - 0.5) # Subtract fade out time
+            if wait_time > 0: self.wait(wait_time)
+            self.play(FadeOut(subtitle_voice), FadeOut(explanation_snell), run_time=0.5)
 
-            # Wait
-            anim_duration = 0.5 + 2.0 + graph_creation_duration
-            wait_time = max(0, tracker.duration - anim_duration - 0.5)
-            if wait_time > 0:
-                self.wait(wait_time)
-            self.play(FadeOut(subtitle_voice), run_time=0.5)
+        self.wait(0.5)
+        # Diagram elements will be cleared by clear_and_reset next
 
-        # Don't store elements as clear_and_reset is called next
-        self.wait(1)
-
-    # --- Scene 4: Highlighting Key Features ---
+    # --- Scene 4: Examples/Applications ---
     def play_scene_04(self):
-        """Scene 4: Highlights key points (max, min, zeros) on the cosine graph."""
+        """Scene 4: Shows examples like bent pencil and prism."""
         # Background
         bg4 = Rectangle(width=config.frame_width, height=config.frame_height,
-                        fill_color=MY_LIGHT_GRAY, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
+                        fill_color=MY_LIGHT_BLUE_BG, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
         self.add(bg4)
 
         # Scene Number
-        scene_num_04 = self.get_scene_number("04", color=MY_BLACK)
-        self.add(scene_num_04)
-
-        # --- Recreate elements needed for this scene ---
-        # Unit Circle (Left)
-        axes_unit = Axes(
-            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=4, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"numbers_to_include": [-1, 1]}, y_axis_config={"numbers_to_include": [-1, 1]},
-            tips=False
-        )
-        radius_val_unit = 1.0
-        origin_point_unit = axes_unit.c2p(0, 0)
-        radius_point_unit = axes_unit.c2p(radius_val_unit, 0)
-        screen_radius_unit = np.linalg.norm(radius_point_unit - origin_point_unit)
-        circle_unit = Circle(radius=screen_radius_unit, color=MY_BLUE, stroke_width=3, arc_center=origin_point_unit)
-        unit_circle_group_small = VGroup(axes_unit, circle_unit).scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
-        self.unit_circle_elements = unit_circle_group_small # Store for this scene
-
-        # Cosine Graph (Right)
-        axes_graph = Axes(
-            x_range=[0, 2 * PI + 0.1, PI / 2],
-            y_range=[-1.2, 1.2, 1],
-            x_length=8, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
-            x_axis_config={"include_numbers": False},
-            y_axis_config={"numbers_to_include": [-1, 0, 1]},
-            tips=False
-        )
-        x_labels_pi = VGroup()
-        custom_x_values_labels = {
-            0: "0", PI/2: r"\pi/2", PI: r"\pi", 3*PI/2: r"3\pi/2", 2*PI: r"2\pi"
-        }
-        for x_val, label_tex in custom_x_values_labels.items():
-            label = MathTex(label_tex, font_size=24, color=MY_DARK_GRAY)
-            label.next_to(axes_graph.c2p(x_val, 0), DOWN, buff=MED_SMALL_BUFF)
-            x_labels_pi.add(label)
-        x_graph_label = axes_graph.get_x_axis_label(r"\theta", edge=DOWN, direction=DOWN, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
-        y_graph_label = axes_graph.get_y_axis_label(r"\cos \theta", edge=LEFT, direction=LEFT, buff=MED_SMALL_BUFF).set_color(MY_DARK_GRAY)
-        axes_graph_labels = VGroup(x_graph_label, y_graph_label)
-        graph_group = VGroup(axes_graph, axes_graph_labels, x_labels_pi).to_edge(RIGHT, buff=LARGE_BUFF)
-        cosine_graph_obj = axes_graph.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=3)
-        self.graph_elements = VGroup(graph_group, cosine_graph_obj) # Store for this scene
-
-        # Add recreated elements to scene
-        self.add(self.unit_circle_elements, self.graph_elements)
+        self.update_scene_number("04", color=MY_DARK_TEXT)
 
         # Title
-        title = Text("Key Values and Properties of Cosine", font_size=36, color=MY_BLACK).to_edge(UP, buff=MED_LARGE_BUFF)
+        title = Text("Refraction in Everyday Life", font_size=48, color=MY_DARK_TEXT)
+        title.to_edge(UP, buff=MED_LARGE_BUFF)
 
-        # Key points calculation
-        key_angles = [0, PI / 2, PI, 3 * PI / 2, 2 * PI]
-        key_values = [1, 0, -1, 0, 1]
-        if not cosine_graph_obj.has_points():
-             print("Error: cosine_graph_obj has no points in Scene 4!")
-             return
-        key_points_graph_coords = [axes_graph.input_to_graph_point(angle, cosine_graph_obj) for angle in key_angles]
+        # --- Left Side: Bent Pencil ---
+        pencil_title = Text("Bent Pencil Illusion", font_size=32, color=MY_DARK_TEXT)
 
-        # Vertical Lines and Labels
-        v_lines = VGroup()
-        v_labels = VGroup()
-        existing_x_labels = {lbl.tex_string: lbl for lbl in x_labels_pi} # Use dict for lookup
+        # Glass and Water
+        glass_width = 2.0
+        glass_height = 3.0
+        water_level_rel = 0.6 # 60% filled
+        glass = Rectangle(width=glass_width, height=glass_height, color=MY_DARK_TEXT, stroke_width=2)
+        water = Rectangle(width=glass_width, height=glass_height * water_level_rel,
+                          fill_color=MY_WATER_BLUE, fill_opacity=0.5, stroke_width=0)
+        water.align_to(glass, DOWN)
+        glass_group = VGroup(glass, water)
 
-        for angle in key_angles:
-            line = axes_graph.get_vertical_line(axes_graph.i2gp(angle, cosine_graph_obj), color=MY_DARK_GRAY, stroke_width=1, line_func=DashedLine)
-            label_text_raw = custom_x_values_labels.get(angle, "") # Get label text from dict
+        # Pencil (Two parts for bending effect)
+        pencil_angle = -PI / 6
+        pencil_top_start = glass.get_top() + LEFT * 0.5 + UP * 1.0
+        interface_y_level = glass.get_bottom()[1] + glass_height * water_level_rel
+        pencil_dir_air = normalize(DOWN + RIGHT * np.tan(pencil_angle))
+        t_intersect = (interface_y_level - pencil_top_start[1]) / pencil_dir_air[1]
+        pencil_interface_intersect = pencil_top_start + t_intersect * pencil_dir_air
 
-            if label_text_raw:
-                label = existing_x_labels.get(label_text_raw)
-                if label is None:
-                    print(f"Warning: Could not find existing label for {label_text_raw}, creating new.")
-                    label = MathTex(label_text_raw, font_size=24, color=MY_DARK_GRAY).next_to(axes_graph.c2p(angle, 0), DOWN, buff=MED_SMALL_BUFF)
-                v_labels.add(label)
-                v_lines.add(line)
+        pencil_part_air = Line(pencil_top_start, pencil_interface_intersect, color=BROWN, stroke_width=8)
 
-        # Horizontal Lines and Labels
-        h_lines = VGroup()
-        h_labels = VGroup()
-        for val in [-1, 0, 1]:
-            line = axes_graph.get_horizontal_line(axes_graph.c2p(0, val), color=MY_DARK_GRAY, stroke_width=1, line_func=DashedLine)
-            label = axes_graph.get_y_axis().get_number_mobject(val)
-            if label is None:
-                 label = MathTex(str(val), font_size=24, color=MY_DARK_GRAY)
-                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF)
-            else:
-                 label.next_to(axes_graph.c2p(0, val), LEFT, buff=MED_SMALL_BUFF)
-            h_lines.add(line)
-            h_labels.add(label)
+        # Calculate refracted angle (simplified)
+        inc_angle_pencil = PI/2 + pencil_angle
+        sin_ref_pencil = (1.0 / 1.33) * np.sin(inc_angle_pencil)
+        if abs(sin_ref_pencil) <= 1:
+             ref_angle_pencil = np.arcsin(sin_ref_pencil)
+        else:
+             ref_angle_pencil = inc_angle_pencil # Fallback
+        refracted_pencil_dir = rotate_vector(DOWN, ref_angle_pencil - PI/2)
 
-        # Highlighting Key Points
-        highlights = VGroup()
-        for point_coord in key_points_graph_coords:
-            highlight = Circle(radius=0.15, color=MY_PURPLE, fill_opacity=0.3, stroke_width=0).move_to(point_coord)
-            highlights.add(highlight)
+        pencil_part_water = Line(pencil_interface_intersect, pencil_interface_intersect + refracted_pencil_dir * 1.8, color=BROWN, stroke_width=8)
 
-        # Arrows
-        unit_circle_points_coords = [
-            axes_unit.c2p(radius_val_unit * np.cos(angle), radius_val_unit * np.sin(angle)) for angle in key_angles
-        ]
-        arrows = VGroup()
-        for i, angle in enumerate(key_angles):
-            start_point = unit_circle_points_coords[i]
-            end_point = key_points_graph_coords[i]
-            if isinstance(start_point, np.ndarray) and isinstance(end_point, np.ndarray) and \
-               not np.any(np.isnan(start_point)) and not np.any(np.isnan(end_point)) and \
-               not np.any(np.isinf(start_point)) and not np.any(np.isinf(end_point)):
-                 arrow = Arrow(start_point, end_point, buff=0.1, color=MY_PURPLE, stroke_width=2, max_tip_length_to_length_ratio=0.1)
-                 arrows.add(arrow)
-            else:
-                 print(f"Warning: Skipping arrow {i} due to invalid coordinates.")
+        pencil_group = VGroup(pencil_part_air, pencil_part_water)
+        pencil_visual = VGroup(glass_group, pencil_group).scale(1.2)
+        pencil_visual_group = VGroup(pencil_title, pencil_visual).arrange(DOWN, buff=MED_LARGE_BUFF)
+        pencil_visual_group.to_edge(LEFT, buff=LARGE_BUFF)
 
-        # --- TTS ---
-        voice_text_04 = "Let's examine some key features. When theta is 0, cos theta is 1, the maximum value. At pi/2, cos theta is 0. At pi, cos theta reaches its minimum, -1. At 3 pi/2, it's 0 again. And at 2 pi, it returns to 1, completing one cycle. These points correspond directly to the x-coordinates on the unit circle at those angles."
+        # --- Right Side: Prism Dispersion ---
+        prism_title = Text("Rainbows / Dispersion", font_size=32, color=MY_DARK_TEXT)
+
+        # Prism
+        prism = Triangle(color=MY_GLASS_BLUE, fill_opacity=0.4).scale(1.5)
+        prism.rotate(-PI/2) # Pointing up
+
+        # Incident White Light
+        white_ray_start = prism.get_left() + LEFT*2 + UP*0.5
+        white_ray_end = prism.get_center() + LEFT*0.5 # Point near center of left face
+        white_ray = Arrow(white_ray_start, white_ray_end, buff=0, color=WHITE, stroke_width=3)
+
+        # Refracted/Dispersed Rays (Simplified exit points)
+        exit_point_base = prism.get_center() + RIGHT*0.5 # Point near center of right face
+        red_exit = exit_point_base + RIGHT*2 + UP*0.3
+        green_exit = exit_point_base + RIGHT*2
+        blue_exit = exit_point_base + RIGHT*2 + DOWN*0.3
+
+        red_ray = Arrow(white_ray_end, red_exit, buff=0, color=RED, stroke_width=2)
+        green_ray = Arrow(white_ray_end, green_exit, buff=0, color=GREEN, stroke_width=2)
+        blue_ray = Arrow(white_ray_end, blue_exit, buff=0, color=BLUE, stroke_width=2)
+        dispersed_rays = VGroup(red_ray, green_ray, blue_ray)
+
+        prism_visual = VGroup(prism, white_ray, dispersed_rays)
+        prism_visual_group = VGroup(prism_title, prism_visual).arrange(DOWN, buff=MED_LARGE_BUFF)
+        prism_visual_group.to_edge(RIGHT, buff=LARGE_BUFF)
+
+        # Narration 4: Examples (English)
+        voice_text_04 = "Refraction is all around us. For example, when you put a straw or pencil in water, it looks 'broken' at the surface. This is because light rays from the submerged part bend when they exit the water into the air. Another beautiful example is a rainbow. Raindrops act like tiny prisms, refracting and dispersing sunlight into its different colors."
         with custom_voiceover_tts(voice_text_04) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
             else:
-                print("Warning: Scene 4 TTS failed.")
+                print("Warning: Narration 4 TTS failed.")
 
             subtitle_voice = Text(voice_text_04, font_size=28, color=MY_BLACK, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # --- Animation ---
+            # Animation Sequence
             self.play(FadeIn(title), FadeIn(subtitle_voice), run_time=1.0)
-            self.add(v_labels, h_labels) # Ensure labels are added before animation
-            self.play(Create(v_lines), Create(h_lines), FadeIn(v_labels), FadeIn(h_labels), run_time=2.0)
+            # Animate pencil example
+            self.play(FadeIn(pencil_visual_group[0]), Create(pencil_visual_group[1][0]), run_time=1.5) # Title and glass
+            self.play(Create(pencil_visual_group[1][1]), run_time=1.5) # Pencil
+            self.wait(4.0) # Wait for narration part about pencil
 
-            highlight_anims = []
-            for i in range(len(highlights)):
-                highlight_anims.append(Indicate(highlights[i], color=MY_PURPLE, scale_factor=1.5, run_time=0.8))
-                if i < len(arrows):
-                    highlight_anims.append(Create(arrows[i], run_time=0.8))
-                highlight_anims.append(Wait(0.3))
+            # Animate prism example
+            self.play(FadeIn(prism_visual_group[0]), Create(prism_visual_group[1][0]), run_time=1.5) # Title and prism
+            self.play(Create(prism_visual_group[1][1]), run_time=1.0) # White ray
+            self.play(AnimationGroup(
+                Create(prism_visual_group[1][2][0]), # Red
+                Create(prism_visual_group[1][2][1]), # Green
+                Create(prism_visual_group[1][2][2]), # Blue
+                lag_ratio=0.3
+            ), run_time=2.0) # Dispersed rays
+            self.wait(4.0) # Wait for narration part about prism
 
-            if highlight_anims:
-                self.play(Succession(*highlight_anims))
-
-            # Wait
-            highlight_duration = len(highlights) * (0.8 + 0.3) + len(arrows) * 0.8
-            anim_duration = 1.0 + 2.0 + highlight_duration
-            wait_time = max(0, tracker.duration - anim_duration - 0.5)
-            if wait_time > 0:
-                self.wait(wait_time)
+            # Synchronization
+            anim_duration = 1.0 + 1.5 + 1.5 + 4.0 + 1.5 + 1.0 + 2.0 + 4.0
+            wait_time = max(0, tracker.duration - anim_duration - 0.5) # Subtract fade out time
+            if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
         self.wait(1)
 
     # --- Scene 5: Conclusion ---
     def play_scene_05(self):
-        """Scene 5: Concludes the explanation."""
+        """Scene 5: Summarizes the concept."""
         # Background
         bg5 = Rectangle(width=config.frame_width, height=config.frame_height,
-                        fill_color=MY_CONCLUSION_BG, fill_opacity=1.0, stroke_width=0).set_z_index(-10)
+                        fill_color=MY_FORMULA_BLUE, fill_opacity=1.0, stroke_width=0).set_z_index(-10) # Darker background
         self.add(bg5)
 
         # Scene Number
-        scene_num_05 = self.get_scene_number("05", color=MY_CONCLUSION_SUB)
-        self.add(scene_num_05)
+        self.update_scene_number("05", color=MY_WHITE)
 
-        # --- Recreate faded elements for conclusion ---
-        # Unit Circle (Left, Faded)
-        axes_unit_faded = Axes(
-            x_range=[-1.5, 1.5, 1], y_range=[-1.5, 1.5, 1], x_length=4, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 1, "include_numbers": False}, # Fainter, no numbers
-            tips=False
-        ).scale(0.8).to_edge(LEFT, buff=LARGE_BUFF)
-        radius_val_unit = 1.0
-        origin_point_unit = axes_unit_faded.c2p(0, 0)
-        radius_point_unit = axes_unit_faded.c2p(radius_val_unit, 0)
-        screen_radius_unit = np.linalg.norm(radius_point_unit - origin_point_unit)
-        circle_unit_faded = Circle(radius=screen_radius_unit, color=MY_BLUE, stroke_width=1, arc_center=origin_point_unit) # Fainter
-        unit_circle_faded = VGroup(axes_unit_faded, circle_unit_faded)
+        # Title
+        title = Text("Summary", font_size=48, color=MY_WHITE)
+        title.to_edge(UP, buff=MED_LARGE_BUFF)
 
-        # Cosine Graph (Right, Faded)
-        axes_graph_faded = Axes(
-            x_range=[0, 2 * PI + 0.1, PI / 2], y_range=[-1.2, 1.2, 1], x_length=8, y_length=4,
-            axis_config={"color": MY_DARK_GRAY, "include_tip": False, "stroke_width": 1, "include_numbers": False}, # Fainter, no numbers
-            tips=False
-        ).to_edge(RIGHT, buff=LARGE_BUFF)
-        cosine_graph_faded = axes_graph_faded.plot(lambda x: np.cos(x), x_range=[0, 2 * PI], color=MY_ORANGE, stroke_width=1) # Fainter
-        graph_faded = VGroup(axes_graph_faded, cosine_graph_faded)
+        # Recap Text
+        recap_text1 = Text("• Refraction is the bending of light as it passes between media.", font_size=30, color=MY_WHITE, width=config.frame_width - 4)
+        recap_text2 = Text("• It's caused by the change in the speed of light.", font_size=30, color=MY_WHITE, width=config.frame_width - 4)
+        # Use MathTex for the formula part
+        recap_text3_part1 = Text("• Snell's Law (", font_size=30, color=MY_WHITE)
+        recap_text3_part2 = MathTex(r"n_1 \sin \theta_1 = n_2 \sin \theta_2", font_size=32, color=MY_RAY_YELLOW)
+        recap_text3_part3 = Text(") describes this relationship.", font_size=30, color=MY_WHITE)
+        recap_text3 = VGroup(recap_text3_part1, recap_text3_part2, recap_text3_part3).arrange(RIGHT, buff=SMALL_BUFF)
 
-        faded_elements = VGroup(unit_circle_faded, graph_faded).set_opacity(0.3)
+        recap_group = VGroup(recap_text1, recap_text2, recap_text3).arrange(DOWN, aligned_edge=LEFT, buff=0.4)
+        recap_group.next_to(title, DOWN, buff=LARGE_BUFF)
 
-        # Final Text
-        final_text = Text("Cosine: The x-coordinate on the Unit Circle!",
-                          font_size=48, color=MY_CONCLUSION_FG, weight=BOLD)
-        final_text.move_to(ORIGIN + UP * 0.5)
+        # Final Thanks
+        thanks_text = Text("Thanks for watching!", font_size=36, color=MY_WHITE)
+        thanks_text.to_edge(DOWN, buff=LARGE_BUFF)
 
-        thanks_text = Text("Thank You!", font_size=36, color=MY_CONCLUSION_SUB)
-        thanks_text.next_to(final_text, DOWN, buff=MED_LARGE_BUFF)
-
-        # --- TTS ---
-        voice_text_05 = "So, remember: the cosine of an angle theta is simply the x-coordinate of the point where the terminal side of the angle intersects the unit circle. Understanding this connection is key to mastering trigonometry. Thank you for watching!"
+        # Narration 5: Conclusion (English)
+        voice_text_05 = "To summarize, refraction is the change in direction of light when it crosses the boundary between different media, caused by a change in light's speed. Snell's Law gives us the precise way to calculate this change. Hopefully, this video helped you understand the refraction of light better! Thanks for watching!"
         with custom_voiceover_tts(voice_text_05) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
             else:
-                print("Warning: Scene 5 TTS failed.")
+                print("Warning: Narration 5 TTS failed.")
 
-            subtitle_voice = Text(voice_text_05, font_size=28, color=MY_CONCLUSION_SUB, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
+            subtitle_voice = Text(voice_text_05, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
+            # Position subtitle above thanks text
+            subtitle_voice.next_to(thanks_text, UP, buff=MED_LARGE_BUFF)
 
-            # --- Animation ---
-            self.play(FadeIn(faded_elements), run_time=1.0)
-            self.play(FadeIn(subtitle_voice), run_time=0.5)
-            self.play(FadeIn(final_text), run_time=2.0) # Use FadeIn for Text
+            # Animation Sequence
+            self.play(FadeIn(title), FadeIn(subtitle_voice), run_time=1.0)
+            # Animate recap lines
+            self.play(FadeIn(recap_text1, shift=UP*0.1), run_time=1.5)
+            self.play(FadeIn(recap_text2, shift=UP*0.1), run_time=1.5)
+            # Animate the combined Text/MathTex line
+            self.play(AnimationGroup(
+                FadeIn(recap_text3[0]), Write(recap_text3[1]), FadeIn(recap_text3[2]),
+                lag_ratio=0.1
+            ), run_time=2.0)
             self.play(FadeIn(thanks_text), run_time=1.0)
 
-            self.play(self.camera.frame.animate.scale(0.9).move_to(final_text.get_center()), run_time=1.5)
-
-            # Wait
-            anim_duration = 1.0 + 0.5 + 2.0 + 1.0 + 1.5
-            wait_time = max(0, tracker.duration - anim_duration - 0.5)
-            if wait_time > 0:
-                self.wait(wait_time)
+            # Synchronization
+            anim_duration = 1.0 + 1.5 + 1.5 + 2.0 + 1.0
+            wait_time = max(0, tracker.duration - anim_duration - 0.5) # Subtract fade out time
+            if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
+        # Final wait before ending
         self.wait(2)
+        # Fade out the last scene number
+        if self.current_scene_num_mob:
+            self.play(FadeOut(self.current_scene_num_mob))
 
 # --- Main execution block ---
 if __name__ == "__main__":
     # Basic configuration
-    config.pixel_height = 1080
-    config.pixel_width = 1920
-    config.frame_rate = 30
-    config.output_file = "CombinedScene"
-    config.disable_caching = True
+    config.pixel_height = 1080  # Set resolution height
+    config.pixel_width = 1920   # Set resolution width
+    config.frame_rate = 30      # Set frame rate
+    config.output_file = "CombinedScene"  # Specify output filename
+    config.disable_caching = True  # Disable caching
 
     # Set output directory using placeholder
-    config.media_dir = r"#(output_path)" # Use raw string for placeholder
+    config.media_dir = r"#(output_path)" # IMPORTANT: Use the placeholder
 
     # Create and render the scene
     scene = CombinedScene()
     scene.render()
 
     print(f"Scene rendering finished. Output in: {config.media_dir}")
-```

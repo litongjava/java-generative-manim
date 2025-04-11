@@ -9,8 +9,8 @@ import hashlib
 from moviepy import AudioFileClip # Correct import
 import manimpango # For font checking
 
-# --- Font Check --- (Ensure CJK font is available)
-DEFAULT_FONT = "Noto Sans CJK SC" # Desired font for Chinese
+# --- Font Check --- (Ensure a standard font is available)
+DEFAULT_FONT = "Arial" # Use a common default font
 available_fonts = manimpango.list_fonts()
 final_font = None
 
@@ -19,7 +19,8 @@ if DEFAULT_FONT in available_fonts:
     final_font = DEFAULT_FONT
 else:
     print(f"Warning: Font '{DEFAULT_FONT}' not found. Trying fallback fonts...")
-    fallback_fonts = ["PingFang SC", "Microsoft YaHei", "SimHei", "Arial Unicode MS"]
+    # Fallbacks for general English text
+    fallback_fonts = ["Helvetica", "Verdana", "DejaVu Sans", "Liberation Sans"]
     found_fallback = False
     for font in fallback_fonts:
         if font in available_fonts:
@@ -28,7 +29,7 @@ else:
             found_fallback = True
             break
     if not found_fallback:
-        print(f"Warning: Neither '{DEFAULT_FONT}' nor fallback fonts found. Using Manim default. Chinese characters may not display correctly.")
+        print(f"Warning: Neither '{DEFAULT_FONT}' nor fallback fonts found. Using Manim default.")
         # final_font remains None
 
 # --- Custom Colors ---
@@ -40,6 +41,8 @@ MY_RED = "#f95738"        # Highlights (direction), force
 MY_WHITE = "#FFFFFF"      # Subtitles
 MY_BLACK = "#000000"      # Not used much with dark background
 MY_GRAY = "#888888"        # Axes, dashed lines
+# Import BROWN if needed, though not used in this version
+# from manim.utils.color.SVGNAMES import BROWN
 
 # --- TTS Caching Setup ---
 CACHE_DIR = r"#(output_path)/audio"
@@ -53,6 +56,7 @@ class CustomVoiceoverTracker:
 
 def get_cache_filename(text):
     """Generates a unique filename based on the text hash."""
+    # Use English text hash for filename consistency
     text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
     return os.path.join(CACHE_DIR, f"{text_hash}.mp3")
 
@@ -69,6 +73,7 @@ def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/
         # print(f"Requesting TTS for: {text[:30]}...")
         try:
             input_text_encoded = requests.utils.quote(text)
+            # Ensure the API call uses English text
             url = f"{base_url}?token={token}&input={input_text_encoded}"
             response = requests.get(url, stream=True, timeout=60)
             response.raise_for_status()
@@ -116,6 +121,7 @@ def custom_voiceover_tts(text, token="123456", base_url="https://uni-ai.fly.dev/
 class CombinedScene(Scene):
     """
     Explains the basic concept of vectors: magnitude and direction, with examples.
+    Uses English for narration and subtitles.
     """
     def setup(self):
         Scene.setup(self)
@@ -124,6 +130,8 @@ class CombinedScene(Scene):
             Text.set_default(font=final_font)
         # Variable to hold the current scene number mobject
         self.current_scene_num_mob = None
+        # Store elements needed across sections
+        self.section_elements = VGroup()
 
     def update_scene_number(self, number_str):
         """Fades out the old scene number and fades in the new one."""
@@ -134,6 +142,23 @@ class CombinedScene(Scene):
         self.play(*animations)
         self.current_scene_num_mob = new_scene_num # Update the reference
 
+    def clear_section(self):
+        """Clears elements specific to the current section."""
+        # Clear updaters from section elements first
+        for mob in self.section_elements:
+             if mob is not None and hasattr(mob, 'get_updaters') and mob.get_updaters():
+                 mob.clear_updaters()
+
+        # Fade out section elements
+        valid_elements = [elem for elem in self.section_elements if elem is not None]
+        if valid_elements:
+            # Use Group for simultaneous fade out
+            self.play(FadeOut(Group(*valid_elements)), run_time=0.75)
+
+        # Clear the VGroup container
+        self.section_elements = VGroup()
+        self.wait(0.1)
+
     def construct(self):
         # --- Scene Setup ---
         # Background
@@ -142,19 +167,52 @@ class CombinedScene(Scene):
         self.add(bg)
 
         # --- Section 1: Introduction ---
+        self.play_section_01()
+        # Keep title, clear definition and arrow later
+
+        # --- Section 2: Magnitude and Direction ---
+        self.play_section_02()
+        # Clear section 2 elements before examples
+
+        # --- Section 3: Examples ---
+        self.play_section_03()
+        # Clear section 3 elements before math representation
+
+        # --- Section 4: Mathematical Representation ---
+        self.play_section_04()
+        # Clear section 4 elements before conclusion
+
+        # --- Section 5: Conclusion ---
+        self.play_section_05()
+
+        # Final wait before ending
+        self.wait(2)
+        # Fade out the last scene number
+        if self.current_scene_num_mob:
+            self.play(FadeOut(self.current_scene_num_mob))
+
+    def play_section_01(self):
+        """Section 1: Introduction"""
         self.update_scene_number("01") # Update scene number
 
-        title = Text("什么是向量？", font_size=60, color=MY_GOLD)
+        title = Text("What is a Vector?", font_size=60, color=MY_GOLD)
         title.to_edge(UP, buff=MED_LARGE_BUFF)
+        # Add title to main scene, not section_elements, so it persists longer
+        self.add(title)
+        self.play(FadeIn(title))
 
-        definition_text = Text("向量是一个既有大小又有方向的量。", font_size=36, color=MY_LIGHT_BLUE)
+        definition_text = Text("A vector is a quantity that has both magnitude and direction.",
+                               font_size=36, color=MY_LIGHT_BLUE, width=config.frame_width - 4) # Add width for wrapping
         definition_text.next_to(title, DOWN, buff=MED_LARGE_BUFF)
 
         # Generic Vector Arrow
         vector_arrow = Arrow(start=LEFT*2+DOWN*1, end=RIGHT*2+UP*1, color=MY_ORANGE, buff=0)
 
-        # Narration 1: Intro
-        voice_text_01 = "大家好！今天我们来了解一下什么是向量。向量是一个既有大小又有方向的量。"
+        # Add elements specific to this section to the group
+        self.section_elements.add(definition_text, vector_arrow)
+
+        # Narration 1: Intro (English)
+        voice_text_01 = "Hello everyone! Today, let's learn about vectors. A vector is a quantity that has both magnitude and direction."
         with custom_voiceover_tts(voice_text_01) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
@@ -163,42 +221,56 @@ class CombinedScene(Scene):
 
             subtitle_voice = Text(voice_text_01, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            self.play(
-                AnimationGroup(
-                    FadeIn(title),
-                    FadeIn(subtitle_voice, run_time=0.5),
-                    lag_ratio=0.0
-                ),
-                run_time=1.0
-            )
+            self.play(FadeIn(subtitle_voice, run_time=0.5))
             self.play(FadeIn(definition_text), run_time=1.5)
             self.play(Create(vector_arrow), run_time=1.5)
 
-            anim_duration = 1.0 + 1.5 + 1.5
+            anim_duration = 0.5 + 1.5 + 1.5
             wait_time = max(0, tracker.duration - anim_duration - 0.5)
             if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        # --- Section 2: Magnitude and Direction ---
+        # Keep definition and arrow for the next section
+
+    def play_section_02(self):
+        """Section 2: Magnitude and Direction"""
         self.update_scene_number("02") # Update scene number
 
-        magnitude_text = Text("大小 (Magnitude): 向量的长度 (模)", font_size=32, color=MY_LIGHT_BLUE)
-        direction_text = Text("方向 (Direction): 向量所指向的方向", font_size=32, color=MY_LIGHT_BLUE)
+        # Retrieve elements from the previous section (assuming they are in section_elements)
+        try:
+            definition_text = self.section_elements[0]
+            vector_arrow = self.section_elements[1]
+        except IndexError:
+            print("Error: Could not retrieve elements for Section 2.")
+            # Create dummy elements if needed for layout, or return
+            definition_text = Text("Definition placeholder").to_edge(UP).shift(DOWN*2)
+            vector_arrow = Arrow(LEFT, RIGHT)
+            self.add(definition_text, vector_arrow) # Add dummies if needed
+            self.section_elements.add(definition_text, vector_arrow) # Add to group too
+
+        magnitude_text = Text("Magnitude: The length or size of the vector.", font_size=32, color=MY_LIGHT_BLUE)
+        direction_text = Text("Direction: The way the vector points.", font_size=32, color=MY_LIGHT_BLUE)
         desc_group = VGroup(magnitude_text, direction_text).arrange(DOWN, aligned_edge=LEFT, buff=MED_SMALL_BUFF)
         # Position description group below the vector
         desc_group.next_to(vector_arrow, DOWN, buff=LARGE_BUFF)
 
         # Highlight Magnitude (Brace)
         brace_mag = Brace(vector_arrow, direction=vector_arrow.copy().rotate(PI/2).get_unit_vector(), color=MY_GOLD)
-        brace_mag_label = Text("大小", font_size=30).set_color(MY_GOLD)
-        brace_mag.put_at_tip(brace_mag_label) # Position the Text label
+        # Use MathTex for label if needed, Text is fine here
+        brace_mag_label = Text("Magnitude", font_size=30).set_color(MY_GOLD)
+        # Correctly position label using put_at_tip
+        brace_mag.put_at_tip(brace_mag_label)
 
         # Highlight Direction (Focus on Arrowhead)
         arrow_tip = vector_arrow.get_tip()
         direction_highlight = Circle(radius=0.3, color=MY_RED, stroke_width=3).move_to(arrow_tip.get_center())
 
-        # Narration 2: Magnitude/Direction
-        voice_text_02 = "你可以把它想象成一个带箭头的线段。线段的长度代表向量的大小，也叫模。箭头的方向代表向量的方向。"
+        # Add new elements to the section group
+        section_2_highlights = VGroup(desc_group, brace_mag, brace_mag_label, direction_highlight)
+        self.section_elements.add(*section_2_highlights)
+
+        # Narration 2: Magnitude/Direction (English)
+        voice_text_02 = "You can think of it as an arrow. The length of the arrow represents the vector's magnitude. The direction the arrow points represents the vector's direction."
         with custom_voiceover_tts(voice_text_02) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
@@ -208,27 +280,36 @@ class CombinedScene(Scene):
             subtitle_voice = Text(voice_text_02, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
             self.play(FadeIn(subtitle_voice), run_time=0.5)
+            # Animate magnitude parts
             self.play(FadeIn(desc_group[0]), GrowFromCenter(brace_mag), FadeIn(brace_mag_label), run_time=2.0)
+            # Animate direction parts
             self.play(FadeIn(desc_group[1]), Create(direction_highlight), run_time=2.0)
 
             anim_duration = 0.5 + 2.0 + 2.0
             wait_time = max(0, tracker.duration - anim_duration - 0.5)
             if wait_time > 0: self.wait(wait_time)
-            # Fade out highlights and subtitle, keep main elements
-            self.play(FadeOut(subtitle_voice), FadeOut(brace_mag), FadeOut(brace_mag_label), FadeOut(direction_highlight), run_time=0.5)
+            # Fade out subtitle and highlights, keep definition and arrow for now
+            self.play(FadeOut(subtitle_voice), FadeOut(section_2_highlights), run_time=0.5)
 
-        # Fade out definition, arrow, and description for examples
-        self.play(FadeOut(definition_text), FadeOut(vector_arrow), FadeOut(desc_group), run_time=1.0)
+        # Clear definition and arrow before examples
+        self.play(FadeOut(definition_text), FadeOut(vector_arrow), run_time=1.0)
+        # Remove them from the group as well (or clear the whole group)
+        self.section_elements.remove(definition_text, vector_arrow)
 
-        # --- Section 3: Examples ---
+    def play_section_03(self):
+        """Section 3: Examples"""
         self.update_scene_number("03") # Update scene number
 
-        examples_title = Text("例子 (Examples):", font_size=40, color=MY_GOLD)
+        # Retrieve title (assuming it's still added directly to self.mobjects)
+        title = self.mobjects[1] # Assuming bg is [0], title is [1] - risky, better to store ref
+
+        examples_title = Text("Examples:", font_size=40, color=MY_GOLD)
         examples_title.next_to(title, DOWN, buff=LARGE_BUFF).align_to(title, LEFT)
         self.play(FadeIn(examples_title), run_time=1.0)
+        self.section_elements.add(examples_title) # Add to group for clearing
 
-        # Narration 3: Examples
-        voice_text_03 = "向量在物理学中有很多应用。例如，速度：像“向东 20 米每秒”就是一个向量，它既有大小（20米每秒），也有方向（东）。位移：比如“从 A 点到 B 点”，描述了方向和距离。还有力：例如“向右推力 5 牛顿”，指定了力的方向和大小。"
+        # Narration 3: Examples (English)
+        voice_text_03 = "Vectors have many applications in physics. For example, velocity: '20 meters per second East' is a vector, specifying both speed (magnitude) and direction (East). Displacement: like 'from point A to point B', describes direction and distance. And force: for example, 'a push of 5 Newtons to the right', specifies the force's direction and strength."
         with custom_voiceover_tts(voice_text_03) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
@@ -238,8 +319,8 @@ class CombinedScene(Scene):
             subtitle_voice = Text(voice_text_03, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
             self.play(FadeIn(subtitle_voice), run_time=0.5)
 
-            # Example 1: Velocity
-            velocity_text = Text("速度: 例如，“向东 20 米/秒”", font_size=32, color=MY_LIGHT_BLUE)
+            # --- Example 1: Velocity ---
+            velocity_text = Text("Velocity: e.g., '20 m/s East'", font_size=32, color=MY_LIGHT_BLUE)
             velocity_arrow = Arrow(start=LEFT*2, end=RIGHT*2, color=MY_ORANGE, buff=0)
             velocity_label = Text("20 m/s", font_size=24, color=MY_ORANGE).next_to(velocity_arrow, DOWN)
             velocity_group = VGroup(velocity_text, velocity_arrow, velocity_label).arrange(DOWN, buff=MED_LARGE_BUFF)
@@ -247,31 +328,29 @@ class CombinedScene(Scene):
             self.play(FadeIn(velocity_group), run_time=1.5)
             self.wait(3.0) # Wait for narration part
 
-            # Example 2: Displacement
-            displacement_text = Text("位移: 例如，“从 A 点到 B 点”", font_size=32, color=MY_LIGHT_BLUE)
+            # --- Example 2: Displacement ---
+            displacement_text = Text("Displacement: e.g., 'from A to B'", font_size=32, color=MY_LIGHT_BLUE)
             point_a = Dot(LEFT*2+DOWN*1, color=MY_GOLD)
             point_b = Dot(RIGHT*2+UP*1, color=MY_GOLD)
             label_a = Text("A", font_size=24, color=MY_GOLD).next_to(point_a, DL)
             label_b = Text("B", font_size=24, color=MY_GOLD).next_to(point_b, UR)
             displacement_arrow = Arrow(point_a.get_center(), point_b.get_center(), color=MY_ORANGE, buff=0.1)
-            # FIX: Arrange displacement elements carefully
             displacement_content = VGroup(point_a, point_b, label_a, label_b, displacement_arrow)
             displacement_group = VGroup(displacement_text, displacement_content).arrange(DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
             displacement_group.next_to(examples_title, DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
-            # FIX: Use FadeOut/FadeIn instead of Transform
+            # Use FadeOut/FadeIn for transition
             self.play(FadeOut(velocity_group, run_time=0.75), FadeIn(displacement_group, run_time=0.75))
             self.wait(3.0) # Wait for narration part
 
-            # Example 3: Force
-            force_text = Text("力: 例如，“向右推力 5 牛顿”", font_size=32, color=MY_LIGHT_BLUE)
+            # --- Example 3: Force ---
+            force_text = Text("Force: e.g., '5 Newtons push to the right'", font_size=32, color=MY_LIGHT_BLUE)
             box = Square(side_length=1.0, color=MY_LIGHT_BLUE, fill_opacity=0.5).move_to(ORIGIN)
             force_arrow = Arrow(start=box.get_left()+LEFT*0.5, end=box.get_right()+RIGHT*0.5, color=MY_RED, buff=0)
             force_label = Text("5 N", font_size=24, color=MY_RED).next_to(force_arrow, UP)
-            # FIX: Arrange force elements
-            force_content = VGroup(box, force_arrow, force_label) # Group visual elements
+            force_content = VGroup(box, force_arrow, force_label)
             force_group = VGroup(force_text, force_content).arrange(DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
             force_group.next_to(examples_title, DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
-            # FIX: Use FadeOut/FadeIn instead of Transform
+            # Use FadeOut/FadeIn for transition
             self.play(FadeOut(displacement_group, run_time=0.75), FadeIn(force_group, run_time=0.75))
             self.wait(3.0) # Wait for narration part
 
@@ -281,16 +360,22 @@ class CombinedScene(Scene):
             if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        # FIX: Fade out examples title along with the last example group
-        self.play(FadeOut(examples_title), FadeOut(force_group), run_time=1.0)
+        # Add the last example group to section_elements before clearing
+        self.section_elements.add(force_group)
+        self.clear_section() # Clear examples title and the last example
 
-        # --- Section 4: Mathematical Representation ---
+    def play_section_04(self):
+        """Section 4: Mathematical Representation"""
         self.update_scene_number("04") # Update scene number
 
-        math_title = Text("数学表示 (Mathematical Representation):", font_size=40, color=MY_GOLD)
+        # Retrieve title
+        title = self.mobjects[1] # Still assuming title is the second mobject
+
+        math_title = Text("Mathematical Representation:", font_size=40, color=MY_GOLD)
         math_title.next_to(title, DOWN, buff=LARGE_BUFF).align_to(title, LEFT)
 
-        math_desc1 = Text("在数学中，向量通常用坐标表示。", font_size=32, color=MY_LIGHT_BLUE)
+        math_desc1 = Text("Mathematically, vectors are often represented by coordinates.",
+                          font_size=32, color=MY_LIGHT_BLUE, width=config.frame_width / 2 - 2) # Wrap text
         math_desc1.next_to(math_title, DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
 
         # Coordinate System
@@ -300,14 +385,14 @@ class CombinedScene(Scene):
             axis_config={"color": MY_GRAY, "include_tip": True, "stroke_width": 2, "include_numbers": True},
             tips=False
         ).add_coordinates()
-        # Position axes more centrally or to the right
-        axes.move_to(RIGHT*2.5 + DOWN*0.5)
+        axes.move_to(RIGHT*2.5 + DOWN*0.5) # Position axes to the right
 
         # Vector (3, 4)
         start_point = axes.c2p(0, 0)
         end_point = axes.c2p(3, 4)
-        vec_3_4 = Vector(end_point - start_point, color=MY_ORANGE)
-        vec_3_4.shift(start_point - vec_3_4.get_start()) # Move start to origin
+        # Use Manim's Vector class for coordinate vectors
+        vec_3_4 = Vector(axes.c2p(3, 4) - axes.c2p(0, 0), color=MY_ORANGE)
+        vec_3_4.shift(axes.c2p(0, 0) - vec_3_4.get_start()) # Ensure start is at origin
 
         vec_label = MathTex("(3, 4)", font_size=36, color=MY_ORANGE).next_to(vec_3_4.get_end(), UR, buff=SMALL_BUFF)
 
@@ -318,24 +403,25 @@ class CombinedScene(Scene):
         label_vert = MathTex("4", font_size=30, color=MY_GRAY).next_to(axes.c2p(0, 2), LEFT)
         components = VGroup(line_horz, line_vert, label_horz, label_vert)
 
-        # FIX: Use width for text wrapping and position carefully
         math_desc2 = Text(
-            "例如，向量 (3, 4) 表示一个从原点出发，水平方向移动 3 个单位，垂直方向移动 4 个单位的向量。",
+            "For example, the vector (3, 4) represents a displacement of 3 units horizontally and 4 units vertically from the origin.",
             font_size=32, color=MY_LIGHT_BLUE, line_spacing=1.2,
-            width=config.frame_width / 2 - 2 # Limit width to prevent overflow
+            width=config.frame_width / 2 - 2 # Limit width
         )
-        # Position text to the left of the axes area
         math_desc2.next_to(math_desc1, DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)
-        # Ensure it's on the left side of the screen
-        math_desc2.align_to(math_desc1, LEFT) # Align with desc1
-        math_desc2.shift(DOWN*0.5) # Add some space below desc1
 
         # Group text elements on the left
         left_text_group = VGroup(math_title, math_desc1, math_desc2)
         left_text_group.to_edge(LEFT, buff=1.0) # Anchor group to left edge
 
-        # Narration 4: Math Representation
-        voice_text_04 = "在数学中，我们经常用坐标来表示向量。比如在二维平面上，向量 (3, 4) 就表示一个从原点出发，先向右移动 3 个单位，再向上移动 4 个单位的向量。"
+        # Group diagram elements on the right
+        right_diagram_group = VGroup(axes, vec_3_4, vec_label, components)
+
+        # Add elements to section group for clearing
+        self.section_elements.add(left_text_group, right_diagram_group)
+
+        # Narration 4: Math Representation (English)
+        voice_text_04 = "Mathematically, we often represent vectors using coordinates. For instance, in a 2D plane, the vector (3, 4) represents a displacement of 3 units horizontally and 4 units vertically from the origin."
         with custom_voiceover_tts(voice_text_04) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
@@ -344,10 +430,11 @@ class CombinedScene(Scene):
 
             subtitle_voice = Text(voice_text_04, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # FIX: Animate left text and right axes separately to avoid overlap
+            # Animate left text and right axes separately
             self.play(FadeIn(math_title), FadeIn(math_desc1), run_time=1.5)
             self.play(Create(axes), run_time=1.5)
             self.play(FadeIn(subtitle_voice), run_time=0.5)
+            # Use Create for Vector
             self.play(Create(vec_3_4), FadeIn(vec_label), run_time=1.5)
             self.play(FadeIn(math_desc2), run_time=1.5) # Fade in wrapped text
             self.play(Create(components), run_time=1.5)
@@ -357,18 +444,23 @@ class CombinedScene(Scene):
             if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        # FIX: Group all math elements for fade out
-        math_group = VGroup(left_text_group, axes, vec_3_4, vec_label, components)
-        self.play(FadeOut(math_group), run_time=1.0)
+        self.clear_section() # Clear math representation elements
 
-        # --- Section 5: Conclusion ---
+    def play_section_05(self):
+        """Section 5: Conclusion"""
         self.update_scene_number("05") # Update scene number
 
-        conclusion_text = Text("这就是向量的基本概念！", font_size=48, color=MY_GOLD)
+        # Retrieve title
+        title = self.mobjects[1] # Still assuming title is the second mobject
+
+        conclusion_text = Text("That's the basic concept of a vector!", font_size=48, color=MY_GOLD)
         conclusion_text.move_to(ORIGIN)
 
-        # Narration 5: Conclusion
-        voice_text_05 = "这就是向量的基本概念！希望这个解释对你有帮助。"
+        # Add to section elements for clearing
+        self.section_elements.add(conclusion_text)
+
+        # Narration 5: Conclusion (English)
+        voice_text_05 = "So, that's the basic concept of a vector! Hope this explanation was helpful."
         with custom_voiceover_tts(voice_text_05) as tracker:
             if tracker.audio_path and tracker.duration > 0:
                 self.add_sound(tracker.audio_path)
@@ -377,7 +469,7 @@ class CombinedScene(Scene):
 
             subtitle_voice = Text(voice_text_05, font_size=28, color=MY_WHITE, width=config.frame_width - 2, should_center=True).to_edge(DOWN, buff=MED_SMALL_BUFF)
 
-            # FIX: Fade out the main title explicitly
+            # Fade out the main title explicitly
             self.play(FadeOut(title), run_time=0.5)
             self.play(FadeIn(conclusion_text), FadeIn(subtitle_voice), run_time=1.5)
 
@@ -386,11 +478,7 @@ class CombinedScene(Scene):
             if wait_time > 0: self.wait(wait_time)
             self.play(FadeOut(subtitle_voice), run_time=0.5)
 
-        # Final wait before ending
-        self.wait(2)
-        # Fade out the last scene number
-        if self.current_scene_num_mob:
-            self.play(FadeOut(self.current_scene_num_mob))
+        self.clear_section() # Clear conclusion text
 
 # --- Main execution block ---
 if __name__ == "__main__":
