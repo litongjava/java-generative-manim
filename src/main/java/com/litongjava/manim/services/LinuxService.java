@@ -96,7 +96,7 @@ public class LinuxService {
       String message = "start run code " + attempt;
       log.info(message);
       if (channelContext != null) {
-        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", info));
+        byte[] jsonBytes = FastJson2Utils.toJSONBytes(Kv.by("info", message));
         Tio.bSend(channelContext, new SsePacket("progress", jsonBytes));
       }
       executeMainmCode = executeCode(code);
