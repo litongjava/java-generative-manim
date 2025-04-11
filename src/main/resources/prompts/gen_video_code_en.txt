@@ -2665,3 +2665,288 @@ Okay, here is the rule based on the `AttributeError: Ellipse object has no attri
     # except ValueError as e:
     #     print(f"Error expected: {e}") # Will likely raise ValueError: latex error...
     ```    
+### 【Manim Code Generation Rule: Use Raw Strings for LaTeX in `MathTex`/`Tex`】
+
+1. **Problem Description:**  
+   Using LaTeX commands containing backslashes (e.g., `\implies`, `\pm`, `\alpha`) within regular Python string literals passed to `MathTex` or `Tex` (for example,  
+   ```python
+   MathTex("f'(x) = 0 \implies 3x^2 - 3 = 0")
+   ```  
+   ) can trigger a `SyntaxWarning: invalid escape sequence '\...'`.
+
+2. **Reason:**  
+   Python interprets backslashes in regular strings as the start of escape sequences (such as `\n` for newline). If the sequence does not form a valid escape (like `\implies`), a warning is issued and the result might not be what you expect.
+
+3. **Correct Practice (Must Follow):**  
+   Use **raw string literals** by prefixing the string with an `r` so that backslashes are treated literally. For example:  
+   ```python
+   MathTex(r"f'(x) = 0 \implies 3x^2 - 3 = 0")
+   MathTex(r"x = \pm 1")
+   ```
+   This ensures the LaTeX commands are passed correctly to Manim and the underlying LaTeX compiler.
+
+4. **Code Example:**  
+   *Incorrect:*  
+   ```python
+   # SyntaxWarning may occur:
+   step2_math = MathTex("f'(x) = 0 \implies 3x^2 - 3 = 0")
+   step3_math = MathTex("x = \pm 1")
+   ```
+   *Correct:*  
+   ```python
+   step2_math = MathTex(r"f'(x) = 0 \implies 3x^2 - 3 = 0")
+   step3_math = MathTex(r"x = \pm 1")
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Correct Usage for Derivative Calculation on Axes】
+
+1. **Problem Description:**  
+   Using methods intended to obtain the numerical slope of a plotted graph can lead to errors. For example, calling  
+   ```python
+   axes.get_derivative_graph(graph, x=x_val)
+   ```  
+   (or passing extra keyword arguments like `dx`) may yield a `TypeError` or result in unexpected behavior.
+
+2. **Reason:**  
+   – The method `Axes.get_derivative_graph()` is designed to return a new `VMobject` representing the *entire* derivative function rather than computing a slope at a single point.  
+   – In some versions, `Axes.get_slope()` does not accept extra keyword arguments such as `dx` or even additional parameters beyond the required positional ones. Some versions may trigger an error stating that too many arguments were provided.
+
+3. **Correct Practice (Must Follow):**  
+   - **If you need a derivative curve:** Use `axes.plot()` with your analytical function.  
+   - **If you need the slope at a specific point:**  
+     1. Use `axes.get_slope(graph, x_val)` with only the required positional arguments (if this method is supported by your Manim version).  
+     2. If that still produces errors or does not behave as expected, define an analytical derivative function (e.g., for \(f(x)\), define \(f'(x)\)) and evaluate it directly at the desired \(x\) value.  
+   - **Do not** pass unwanted keyword arguments such as `dx` to these methods.
+
+4. **Code Example:**  
+   *Incorrect (may trigger TypeError):*  
+   ```python
+   # Incorrect: Passing dx or expecting get_derivative_graph to compute a single slope:
+   # slope_value = axes.get_derivative_graph(graph, x=x_val_tracker.get_value(), dx=0.01)
+   ```
+   *Correct (using analytical derivative):*  
+   ```python
+   # Define the analytical derivative function:
+   deriv_func = lambda x: 0.1 * (3 * x**2 - 9)
+   
+   # Then use always_redraw to update the slope text:
+   slope_text = always_redraw(lambda: MathTex(
+       rf"f'(x) = \text{{Slope}} \approx {deriv_func(x_val_tracker.get_value()):.2f}",
+       font_size=36, color=MY_TEXT_BLACK
+   ))
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Correctly Import and Use the `Color` Class】
+
+1. **Problem Description:**  
+   Attempts to import the `Color` class from incorrect modules (e.g., directly from the top-level `manim` package or from a nonexistent `manim.utils.color.core` submodule) result in `ImportError` messages.
+
+2. **Reason:**  
+   Depending on the Manim version, the `Color` class may not be available where you expect it. It is important to use the proper import path so that color operations (especially those involving methods like `.interpolate()`) work correctly.
+
+3. **Correct Practice (Must Follow):**  
+   – **For recent versions of Manim Community (v0.19.0 and later):** Verify whether the `Color` class is exported at the top level or via a specific submodule. (In many cases, you can use:)  
+     ```python
+     from manim import Color
+     ```  
+     If this import works for your environment, use it.  
+   – **If you experience ImportErrors,** consult your Manim version’s documentation to determine the proper path.  
+   – When using functions like `interpolate_color`, ensure that any hexadecimal strings or predefined color names are converted to `Color` objects before performing interpolation. For example:  
+     ```python
+     color1_obj = Color(MY_COLOR_A_STR)
+     color2_obj = Color(MY_COLOR_B_STR)
+     ```
+     
+4. **Code Example:**  
+   *When using interpolation:*  
+   ```python
+   from manim import Color, interpolate_color, VMobject
+   
+   MY_COLOR_A_STR = "#FF0000"
+   MY_COLOR_B_STR = "#0000FF"
+   
+   # Convert strings to Color objects:
+   color1_obj = Color(MY_COLOR_A_STR)
+   color2_obj = Color(MY_COLOR_B_STR)
+   
+   # Interpolate colors:
+   interpolated_color_obj = interpolate_color(color1_obj, color2_obj, 0.5)
+   
+   # Use the resulting color in a VMobject:
+   my_vmobject = VMobject(color=interpolated_color_obj)
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Use NumPy Arrays for Vector Arithmetic】
+
+1. **Problem Description:**  
+   Performing arithmetic on point coordinates represented as standard Python lists or tuples (e.g., `[1, 2, 0]`) using operators like `+` or `/` causes errors (for example, attempting `([1, 2, 0] + [3, 1, 0]) / 2`).
+
+2. **Reason:**  
+   Python lists and tuples do not support element-wise arithmetic with these operators. In contrast, NumPy arrays overload these operators to perform the desired element-wise operations.
+
+3. **Correct Practice (Must Follow):**  
+   Always convert coordinate lists or tuples to NumPy arrays using `np.array()`. For example, calculate the midpoint as:  
+   ```python
+   midpoint = (np.array(p1) + np.array(p2)) / 2
+   ```
+   Ensure that `import numpy as np` is included at the top of your script.
+
+4. **Code Example:**  
+   *Incorrect:*  
+   ```python
+   def get_midpoint_incorrect(p1, p2):
+       return (p1 + p2) / 2  # Fails for lists
+   ```
+   *Correct:*  
+   ```python
+   import numpy as np
+
+   def get_midpoint_correct(p1, p2):
+       np_p1 = np.array(p1)
+       np_p2 = np.array(p2)
+       midpoint = (np_p1 + np_p2) / 2
+       return midpoint
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Ensure All Custom Variables (Especially Colors) Are Defined Before Use】
+
+1. **Problem Description:**  
+   Using a custom variable name (for example, `MY_ORANGE`, `MY_RED`, or any user-defined constant) before it is defined causes a `NameError`.
+
+2. **Reason:**  
+   A `NameError` indicates that the variable was used before being assigned a value. This is common when custom constants (such as color codes) are misspelled, commented out, or omitted.
+
+3. **Correct Practice (Must Follow):**  
+   - **Define Before Use:** Ensure that all custom variables are defined at the beginning of your script or in an appropriate global scope.  
+   - **Maintain Consistency:** Check that the spelling and capitalization match between where the variable is defined and where it is used.
+
+4. **Code Example:**  
+   *Incorrect:*  
+   ```python
+   # --- Custom Colors ---
+   # MY_RED = "#DC2626"  # This definition is missing or commented out
+
+   class MyScene(Scene):
+       def construct(self):
+           try:
+               my_circle = Circle(color=MY_RED)
+               self.add(my_circle)
+           except NameError as e:
+               print(f"Error expected: {e}")
+   ```
+   *Correct:*  
+   ```python
+   # --- Custom Colors ---
+   MY_RED = "#DC2626"  # Definition is present
+
+   class MyScene(Scene):
+       def construct(self):
+           my_circle = Circle(color=MY_RED)
+           self.add(my_circle)
+           self.wait()
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Correct Camera Manipulation Based on Scene Type】
+
+1. **Problem Description:**  
+   Accessing or manipulating `self.camera.frame` (for example, calling methods like `self.camera.frame.move_to(ORIGIN)`) in a scene that directly inherits from `Scene` leads to an `AttributeError` because `Scene` does not expose a `frame` with those methods.
+
+2. **Reason:**  
+   The `frame` attribute with methods for panning, zooming, and repositioning is provided by the `MovingCameraScene` class (or `ThreeDScene` for 3D scenes). A basic `Scene` class uses a simpler camera model that does not include a manipulable `frame`.
+
+3. **Correct Practice (Must Follow):**  
+   - For scenes requiring dynamic camera movement, have your scene class inherit from `MovingCameraScene` (or `ThreeDScene` as needed).  
+   - In a static scene (inheriting from `Scene`), do **not** attempt to access or modify `self.camera.frame`; remove or comment out such code.
+
+4. **Code Example:**  
+   *MovingCameraScene:*  
+   ```python
+   from manim import MovingCameraScene, Square, Create, Restore, ORIGIN, LEFT, config
+
+   class MyMovingCameraScene(MovingCameraScene):
+       def construct(self):
+           self.camera.frame.save_state()
+           square = Square()
+           self.play(Create(square))
+           self.play(self.camera.frame.animate.move_to(LEFT*2).scale(0.5))
+           self.wait(1)
+           self.play(Restore(self.camera.frame))
+   ```
+   *Static Scene:*  
+   ```python
+   from manim import Scene, Circle, Create, FadeOut
+
+   class MyStaticScene(Scene):
+       def construct(self):
+           circle = Circle()
+           self.play(Create(circle))
+           self.wait(1)
+           self.play(FadeOut(circle))
+           # Do not attempt to modify self.camera.frame here.
+   ```
+
+---
+
+### 【Manim Code Generation Rule: Correct Usage of `Axes.get_line_from_point_slope()`】
+
+1. **Problem Description:**  
+   Using `Axes.get_line_from_point_slope()` with keyword arguments—for the point, slope, or additional appearance options like `line_length` or `color`—raises a `TypeError` because the method does not accept these keywords.
+
+2. **Reason:**  
+   In the target Manim version, `Axes.get_line_from_point_slope()` expects exactly two positional arguments:
+   - The point through which the line passes (e.g. provided as `axes.c2p(x, y)`).
+   - The numerical slope.
+   
+   No extra keyword arguments are allowed. If you need to control the line’s length or color, you must compute the line segment manually.
+
+3. **Correct Practice (Must Follow):**  
+   - Pass the point coordinates as the first positional argument and the slope value as the second positional argument.  
+   - Do not use keywords like `point=...` or `slope=...`.  
+   - For additional styling (such as specific length or color), manually calculate the endpoints and create a `Line` object with the desired parameters. A helper function (possibly wrapped with `always_redraw` for dynamic updates) is recommended if the tangent line needs to update continuously.
+
+4. **Code Example:**  
+   *Incorrect:*  
+   ```python
+   # This usage will trigger a TypeError:
+   # tangent = axes.get_line_from_point_slope(
+   #     point=axes.c2p(1, 1),
+   #     slope=2,
+   #     line_length=2,
+   #     color=ORANGE
+   # )
+   ```
+   *Correct (Manual Calculation):*  
+   ```python
+   import numpy as np
+   from manim import Line, ORANGE
+
+   def create_tangent_segment(axes, x_val, y_val, slope, length=2, color=ORANGE):
+       # Convert the point using axes.c2p
+       point = axes.c2p(x_val, y_val)
+       # Calculate the angle of the tangent line
+       angle = np.arctan(slope)
+       # Determine the start and end points of the line segment
+       start_point = point - (length / 2) * np.array([np.cos(angle), np.sin(angle), 0])
+       end_point = point + (length / 2) * np.array([np.cos(angle), np.sin(angle), 0])
+       return Line(start_point, end_point, color=color)
+
+   # Use always_redraw if dynamic updating is needed:
+   # tangent_line = always_redraw(lambda: create_tangent_segment(
+   #     axes,
+   #     x_tracker.get_value(),
+   #     func(x_tracker.get_value()),
+   #     deriv_func(x_tracker.get_value()),
+   #     length=2,
+   #     color=ORANGE
+   # ))
+   ```
